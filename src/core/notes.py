@@ -7,41 +7,41 @@ from src.prompts import *
 from datetime import datetime
 
 # 🗂️ Caminho do arquivo JSON da transcrição
-#caminho_arquivo = "src\\03. transcrições\\Plataforma_Finclass\\01. Como funciona a Finclass - 2025-05-12 15-34-07.json"
+#text = "src\\03. transcrições\\Plataforma_Finclass\\01. Como funciona a Finclass - 2025-05-12 15-34-07.json"
 
 def gerar_nota_md(
-    caminho_arquivo: str,
+    text: str,
     prompt_task: str,
     area: str = None,
     tags_adicionais: list = None,
 ):
-    if not os.path.exists(caminho_arquivo):
-        print(f"❌ Arquivo não encontrado: {caminho_arquivo}")
+    if not os.path.exists(text):
+        print(f"❌ Arquivo não encontrado: {text}")
         return
     
-    if os.path.getsize(caminho_arquivo) == 0:
-        print(f"⚠️ Arquivo vazio: {caminho_arquivo}")
+    if os.path.getsize(text) == 0:
+        print(f"⚠️ Arquivo vazio: {text}")
         return
 
-    with open(caminho_arquivo, "r", encoding="utf-8") as f:
+    with open(text, "r", encoding="utf-8") as f:
         try:
             dados_transcricao = json.load(f)
         except json.JSONDecodeError:
-            print(f"🚫 Erro ao ler JSON: {caminho_arquivo}")
+            print(f"🚫 Erro ao ler JSON: {text}")
             return
     
     # 📥 Carrega o JSON
-    with open(caminho_arquivo, "r", encoding="utf-8") as f:
+    with open(text, "r", encoding="utf-8") as f:
         dados_transcricao = json.load(f)
 
     # 🔎 Extrai a transcrição completa
     transcricao = dados_transcricao.get("text", "")
 
     # 🔍 Extrai metadados do arquivo
-    partes = caminho_arquivo.split("\\")
+    partes = text.split("\\")
     curso = partes[-2] if len(partes) >= 2 else partes[-1]
-    titulo_aula = caminho_arquivo.split("\\")[-1].split(" - ")[0]
-    data_aula_original = caminho_arquivo.split("/")[-1].split(" - ")[1].split(".")[0]
+    titulo_aula = text.split("\\")[-1].split(" - ")[0]
+    data_aula_original = text.split("/")[-1].split(" - ")[1].split(".")[0]
     data_aula = datetime.strptime(data_aula_original, "%Y-%m-%d %H-%M-%S").strftime("%d/%m/%Y %H:%M:%S")
 
     # 🕓 Duração
@@ -104,12 +104,12 @@ revisao:
 """
 
     # 💾 Caminho de saída
-    caminho_nota = "\\".join(caminho_arquivo.replace("03. transcrições", "04. notas").split("\\")[:-1])
+    caminho_nota = "\\".join(text.replace("03. transcrições", "04. notas").split("\\")[:-1])
     os.makedirs(caminho_nota, exist_ok=True)
 
-    caminho_arquivo_md = f"{caminho_nota}/{titulo_aula}.md"
-    with open(caminho_arquivo_md, "w", encoding="utf-8") as file:
+    text_md = f"{caminho_nota}/{titulo_aula}.md"
+    with open(text_md, "w", encoding="utf-8") as file:
         file.write(nota_final)
 
-    print(f"✅ Nota gerada e salva em: {caminho_arquivo_md}")
-    return caminho_arquivo_md
+    print(f"✅ Nota gerada e salva em: {text_md}")
+    return text_md

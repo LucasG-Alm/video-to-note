@@ -1,10 +1,10 @@
 # 🎥 Videos to Notes – Organize seu Conhecimento em Markdown
 
-> Transforme vídeos em notas estruturadas no Obsidian.  
+Transforme vídeos em notas estruturadas no Obsidian.  
 Resumos automáticos, transcrição, templates personalizáveis e muito mais.  
 
-⚠️ **Uso Pessoal & Educacional:**  
-Este projeto não distribui nem incentiva a reprodução de conteúdos protegidos por direitos autorais. Seu objetivo é servir como ferramenta pessoal de organização de conhecimento a partir de conteúdos de uso próprio ou de acesso livre.
+> ⚠️ **Uso Pessoal & Educacional:**  
+> Este projeto não distribui nem incentiva a reprodução de conteúdos protegidos por direitos autorais. Seu objetivo é servir como ferramenta pessoal de organização de conhecimento a partir de conteúdos de uso próprio ou de acesso livre.
 
 ---
 
@@ -90,6 +90,7 @@ poetry run python src/app_youtube.py
 # 🗺️ Roadmap e Futuro
 |🔥 Funcionalidade|🚧 Status|
 |------------------|--------|
+|Criar testes|🕐 Planejado|
 |Armazenamento MongoDB|🕐 Planejado|
 |Templates Dinâmicos|🕐 Em Progresso|
 |Gerador de Templates|🕐 Planejado|

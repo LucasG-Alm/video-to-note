@@ -1,38 +1,17 @@
 import re
-import yt_dlp
+from yt_dlp import YoutubeDL
 from youtube_transcript_api import YouTubeTranscriptApi
 from datetime import datetime
+from pprint import pprint
+import json
+import tqdm
 
+from transcription import *
 
 def extract_video_id(url):
     """Extrai o ID do vídeo do link do YouTube."""
     match = re.search(r"(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})", url)
     return match.group(1) if match else None
-
-
-def get_video_metadata(video_id):
-    """Pega metadados do vídeo: título, descrição, autor, data."""
-    ydl_opts = {'quiet': True, 'skip_download': True}
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-        return {
-            'title': info.get('title', 'Sem título'),
-            'description': info.get('description', ''),
-            'channel': info.get('uploader', 'Desconhecido'),
-            'upload_date': datetime.strptime(info.get('upload_date', '19700101'), '%Y%m%d').strftime('%d/%m/%Y')
-        }
-
-
-def extract_timestamps(description):
-    """Extrai tópicos e timestamps da descrição."""
-    pattern = re.compile(r'(\d{1,2}):(\d{2})\s+(.+)')
-    timestamps = []
-    for match in pattern.findall(description):
-        minutes, seconds, title = match
-        start_time = int(minutes) * 60 + int(seconds)
-        timestamps.append((start_time, f"{minutes}:{seconds}", title.strip()))
-    return timestamps
-
 
 def get_transcript(video_id):
     """Pega a transcrição do vídeo."""
@@ -42,87 +21,77 @@ def get_transcript(video_id):
         print(f"❌ Sem transcrição disponível: {e}")
         return []
 
+def transcript_to_text(transcript):
+    """Converte a transcrição em texto."""
+    return ' '.join([entry['text'] for entry in transcript])
 
-def group_transcript_by_timestamps(transcript, timestamps):
-    """Agrupa a transcrição com base nos tópicos da minutagem."""
-    grouped = {}
-    for i, (start_time, time_str, title) in enumerate(timestamps):
-        end_time = timestamps[i + 1][0] if i + 1 < len(timestamps) else float('inf')
-        grouped[(time_str, title)] = [
-            entry['text'] for entry in transcript if start_time <= entry['start'] < end_time
-        ]
-    return grouped
+def get_video_metadata(url):
+    """Extrai metadados completos de um vídeo do YouTube."""
+    ydl_opts = {'quiet': True, 'skip_download': True}
 
-
-def generate_markdown_note(metadata, timestamps, grouped_transcript, url):
-    """Gera a nota em formato markdown."""
-
-    data_hoje = datetime.now().strftime('%d/%m/%Y')
-
-    # ==== HEADER ====
-    header = f"""---
-page: "[[YouTube]]"
-Área: 
-    - Aprendizado
-tags:
-    - #youtube
-    - #{metadata['channel'].replace(' ', '_')}
-Link: {url}
-autor: "[[{metadata['channel']}]]"
-data_nota: {data_hoje}
-status:
-revisao:
----
-"""
-
-    # ==== RESUMO ====
-    resumo = "## Resumo:\nResumo não informado. (Gerar manualmente)\n\n"
-
-    # ==== TERMOS ====
-    termos = "### Termos e Referências Principais:\n- Não informado.\n\n"
-
-    # ==== REFERÊNCIAS ====
-    referencias = "### Referências e Links:\n- Não informado.\n\n"
-
-    # ==== MINUTAGEM ====
-    minutagem = "### Minutagem:\n"
-    for (start_sec, time_str, title) in timestamps:
-        minutagem += f"- {time_str} - **{title}**\n"
-    minutagem += "\n"
-
-    # ==== PALAVRAS-CHAVE ====
-    palavras = "### Palavras-chave:\n- Não informado.\n\n"
-
-    # ==== TRANSCRIÇÃO POR TÓPICO ====
-    texto = ""
-    for (time_str, title), linhas in grouped_transcript.items():
-        texto += f"## {title}\n**[{time_str}]**\n\n"
-        texto += "\n".join(linhas) + "\n\n---\n\n"
-
-    nota_md = header + resumo + termos + referencias + minutagem + palavras + texto
-    return nota_md
+    with YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=False)
 
 
-def save_markdown(filename, content):
-    with open(filename, 'w', encoding='utf-8') as f:
-        f.write(content)
+    # Formatar data
+    upload_date = info.get('upload_date')
+    if upload_date:
+        upload_date = datetime.strptime(upload_date, "%Y%m%d-%H:%M").strftime("%d/%m/%Y %H:%M")
+    else:
+        upload_date = "Não informado"
 
+    # Construir o dicionário com os dados
+    metadata = {
+        'transcription_by': 'YouTubeTranscriptApi',
+        'api': 'youtube',
+        'type_file': 'link',
+        'source': url,
+        'date_generated': datetime.now().isoformat(),
+        'video_id': info.get('id'),
+        'title': info.get('title'),
+        'description': info.get('description'), # Tratamento
+        'uploader': info.get('uploader'), # para notas, acho q o id seja mais interessante
+        'uploader_id': info.get('uploader_id'), # sera q em outras redes o @ é o mesmo?
+        #'channel_id': info.get('channel_id'), # Não usar
+        'channel_url': info.get('channel_url'), # Usar para criar uma nota do canal (fururamente)
+        'webpage_url': info.get('webpage_url'), # Link do video
+        'date_upload': upload_date,
+        'duration_sec': info.get('duration'),
+        #'view_count': info.get('view_count'), # Não usar
+        #'like_count': info.get('like_count'), # Não usar
+        'categories': info.get('categories'), # talvez usar...
+        #'tags': info.get('tags'), # Não usar
+        'thumbnail': info.get('thumbnail'), # anexar a nota
+        #'thumbnails': info.get('thumbnails'), # não usar
+        #'subtitles': info.get('subtitles'), # Não é a transcrição?
+        #'automatic_captions': info.get('automatic_captions'),# Não é a transcrição?
+        #'fps': info.get('fps'), # Não usar
+        #'width': info.get('width'), # Não usar
+        #'height': info.get('height'), # Não usar
+        #'filesize': info.get('filesize'), # Não usar
+        #'license': info.get('license'), # Não usar
+        'chapters': info.get('chapters'), #
+        #'playable_in_embed': info.get('playable_in_embed'), # Não usar
+        #'availability': info.get('availability'), # Não usar
+        #'live_status': info.get('live_status') # Não usar
+    }
+
+    return metadata
 
 # 🔥 EXECUÇÃO
 url = "https://www.youtube.com/watch?v=C67qPfI8_hg"
 video_id = extract_video_id(url)
 
 if video_id:
-    meta = get_video_metadata(video_id)
-    timestamps = extract_timestamps(meta['description'])
-    transcript = get_transcript(video_id)
-    grouped = group_transcript_by_timestamps(transcript, timestamps) if timestamps else {('00:00', 'Completo'): [entry['text'] for entry in transcript]}
+    metadata = get_video_metadata(video_id)
+    title = re.sub(r'[\\/*?:"<>|]', "_", metadata['title'])
 
-    nota_md = generate_markdown_note(meta, timestamps, grouped, url)
+    transcript = {
+        'text': transcript_to_text(get_transcript(video_id)),
+        'segments': get_transcript(video_id)
+    }
 
-    filename = f"{meta['title'].replace(' ', '_')}.md"
-    save_markdown(filename, nota_md)
+    salvar_transcricao(metadata, transcript, f'data\\03. transcriptions\\Youtube\\{title}')
 
-    print(f"✅ Nota salva como {filename}")
 else:
     print("❌ Não foi possível extrair o ID do vídeo.")

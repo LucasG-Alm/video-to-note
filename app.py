@@ -91,7 +91,7 @@ if processar_audio_manual and caminho_manual:
     st.success("✅ Áudio gerado manualmente!")
 
 if processar_trans_manual and caminho_manual:
-    audio_para_transcricao([caminho_manual])
+    audio_para_transcricao([caminho_manual],"whisper-large-v3-turbo")
     st.success("✅ Transcrição gerada manualmente!")
 
 if processar_nota_manual and caminho_manual:
@@ -109,7 +109,7 @@ if st.button("🚀 Executar Processamento Selecionado"):
             if item["Extrair Áudio"]:
                 video_para_audio([item["Video Path"]])
             if item["Transcrever"]:
-                audio_para_transcricao([item["Audio Path"]])
+                audio_para_transcricao([item["Audio Path"]],"whisper-large-v3-turbo")
             if item["Gerar Nota"]:
                 transcricao_para_nota([item["Transcricao Path"]])
 
