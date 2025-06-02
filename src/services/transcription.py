@@ -6,6 +6,13 @@ import json
 from groq import Groq
 from pydub import AudioSegment
 
+#from src.utils.utils import *
+def print_hex_color(hex_color, msg, msg2=""):
+    r = int(hex_color[1:3], 16)
+    g = int(hex_color[3:5], 16)
+    b = int(hex_color[5:7], 16)
+    print(f"\033[38;2;{r};{g};{b}m{msg}\033[0m {msg2}")
+
 def transcrever_audio(caminho_arquivo: str, idioma="pt", contexto="", model: str="whisper-large-v3-turbo"):
     client = Groq() # caso mudar a api de consumo, mudar a api dos metadados
     print(f'\033[38;2;50;203;255m 📡 Enviando áudio para transcrição...\033[0m')
@@ -46,7 +53,7 @@ def salvar_transcricao(metadata: dict, transcription, caminho_saida: str):
             separators=(",", ": ")
         )
     
-    print_hex_color("#0bd271", "✅ Transcrição salva em: ", saida_json)
+    print_hex_color("#0bd271", "✅ Transcrição salva em: ", caminho_saida)
 
 
 if __name__ == "__main__":

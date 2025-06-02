@@ -7,6 +7,13 @@ import json
 import tqdm
 
 from transcription import *
+def print_hex_color(hex_color, msg, msg2=""):
+    r = int(hex_color[1:3], 16)
+    g = int(hex_color[3:5], 16)
+    b = int(hex_color[5:7], 16)
+    print(f"\033[38;2;{r};{g};{b}m{msg}\033[0m {msg2}")
+
+
 
 def extract_video_id(url):
     """Extrai o ID do vídeo do link do YouTube."""
@@ -18,7 +25,7 @@ def get_transcript(video_id):
     try:
         return YouTubeTranscriptApi.get_transcript(video_id, languages=['pt'])
     except Exception as e:
-        print(f"❌ Sem transcrição disponível: {e}")
+        print_hex_color('#f92f60', f"❌ Sem transcrição disponível: {e}")
         return []
 
 def transcript_to_text(transcript):
@@ -35,8 +42,17 @@ def get_video_metadata(url):
 
     # Formatar data
     upload_date = info.get('upload_date')
+
     if upload_date:
-        upload_date = datetime.strptime(upload_date, "%Y%m%d-%H:%M").strftime("%d/%m/%Y %H:%M")
+        try:
+            if "-" in upload_date:
+                # Caso venha com hora
+                upload_date = datetime.strptime(upload_date, "%Y%m%d-%H:%M").strftime("%d/%m/%Y %H:%M")
+            else:
+                # Caso venha só a data
+                upload_date = datetime.strptime(upload_date, "%Y%m%d").strftime("%d/%m/%Y")
+        except Exception:
+            upload_date = "Formato inválido"
     else:
         upload_date = "Não informado"
 
@@ -94,4 +110,4 @@ if video_id:
     salvar_transcricao(metadata, transcript, f'data\\03. transcriptions\\Youtube\\{title}')
 
 else:
-    print("❌ Não foi possível extrair o ID do vídeo.")
+    print_hex_color('#f92f60', "❌ Não foi possível extrair o ID do vídeo.")
