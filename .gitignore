@@ -1,0 +1,42 @@
+# Ambiente virtual
+.venv/
+venv/
+data/**/Plataforma_Finclass/
+
+
+
+# Arquivos de dependências
+poetry.lock
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Configurações do VSCode
+.vscode/
+
+# Dados e arquivos gerados
+/data/
+*.db
+*.sqlite3
+*.log
+*.json
+*.mp3
+*.mkv
+*.mp4
+*.wav
+
+# Notas e transcrições geradas
+*.md
+
+# Arquivos temporários
+*.tmp
+*.bak
+
+# Configurações e segredos
+.env
+.env.*
+
+# Outros
+.DS_Store
+Thumbs.db 

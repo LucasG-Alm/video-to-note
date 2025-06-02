@@ -1,0 +1,31 @@
+[project]
+name = "doc-courses"
+version = "0.1.0"
+description = "Carregue Links de cursos/videos ou arquivos locais e converta em notas de estudos"
+authors = [
+    {name = "Lucas Gabriel de Almeida",email = "156014432+LucasG-Alm@users.noreply.github.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "openai (>=1.77.0,<2.0.0)",
+    "groq (>=0.24.0,<0.25.0)",
+    "markdownify (>=1.1.0,<2.0.0)",
+    "pydub (>=0.25.1,<0.26.0)",
+    "moviepy (>=2.1.2,<3.0.0)",
+    "tqdm (>=4.67.1,<5.0.0)",
+    "langchain (>=0.3.25,<0.4.0)",
+    "langchain-groq (>=0.3.2,<0.4.0)",
+    "dotenv (>=0.9.9,<0.10.0)",
+    "ipykernel (>=6.29.5,<7.0.0)",
+    "pandas (>=2.2.3,<3.0.0)",
+    "streamlit (>=1.45.1,<2.0.0)",
+    "streamlit-aggrid (>=1.1.5,<2.0.0)",
+    "yt-dlp (>=2025.5.22,<2026.0.0)",
+    "youtube-transcript-api (>=1.0.3,<2.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
