@@ -31,22 +31,44 @@ Resumos automáticos, transcrição, templates personalizáveis e muito mais.
 ## 🗂️ Estrutura do Projeto
 ```
 src/
-├── core/ # Núcleo do projeto
-│ ├── file_handler.py # Gerenciamento de arquivos
-│ └── audio_handler.py # Manipulação de áudio
+├── core/                # Núcleo do projeto
+│   ├── file_handler.py
+│   ├── notes.py
+│   ├── converter.py
+│   ├── audio.py
+│   └── __init__.py
 │
-├── services/ # Serviços externos
-│ └── transcription.py # Serviço de transcrição (Whisper)
+├── services/            # Serviços externos
+│   ├── transcription.py
+│   ├── youtube.py
+│   ├── youtube-ai.py
+│   ├── mongodb.py
+│   └── __init__.py
 │
-├── utils/ # Funções auxiliares e prompts
+├── utils/               # Funções auxiliares
+│   ├── utils.py
+│   └── __init__.py
 │
-├── data/ # Dados
-│ ├── videos/ # Vídeos de entrada
-│ ├── audio/ # Áudios extraídos
-│ ├── transcriptions/ # Transcrições em texto
-│ └── notes/ # Notas Markdown geradas
+├── templates/           # Templates de notas
+│   ├── template_youtube.md
+│   └── template_curso.md
 │
-└── app.py # Interface Streamlit principal
+├── app_youtube.py       # Interface para YouTube
+├── prompts.py           # Prompts e textos auxiliares
+├── __init__.py
+└── app.py               # Interface principal (Streamlit)
+
+
+data/
+├── 01. videos/          # Vídeos de entrada
+│   └── *Estrutura de pastas desejada*/
+├── 02. audio/           # Áudios extraídos
+│   └── *Estrutura de pastas desejada*/
+├── 03. transcriptions/  # Transcrições em texto
+│   ├── Youtube/
+│   └── *Estrutura de pastas desejada*/
+├── 04. notes/           # Notas Markdown geradas
+│   └── *Estrutura de pastas desejada*/
 ```
 
 ---

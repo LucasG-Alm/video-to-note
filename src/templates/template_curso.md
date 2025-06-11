@@ -1,11 +1,12 @@
 ---
-curso: "[[{curso}]]"
-time: {duracao_formatada}
-area: 
-    - {area}
+curso: "[[{{curso}}]]"
+time: {{duracao_formatada}}
+Área: 
+    - {{area}}
 tags: 
-    - {tags_md}
-data_aula: {data_aula}
+    - {{tags_md}}
+data_aula: {{data_aula}}
+data_nota: {{data}}
 status:
 revisao:
 ---

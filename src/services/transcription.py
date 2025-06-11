@@ -15,7 +15,7 @@ def print_hex_color(hex_color, msg, msg2=""):
 
 def transcrever_audio(caminho_arquivo: str, idioma="pt", contexto="", model: str="whisper-large-v3-turbo"):
     client = Groq() # caso mudar a api de consumo, mudar a api dos metadados
-    print(f'\033[38;2;50;203;255m 📡 Enviando áudio para transcrição...\033[0m')
+    print(f'\033[38;2;50;203;255m📡 Enviando áudio para transcrição...\033[0m')
 
     # Barra de progresso fake enquanto espera a Groq responder
     with open(caminho_arquivo, "rb") as file:
@@ -43,6 +43,7 @@ def salvar_transcricao(metadata: dict, transcription, caminho_saida: str):
         'transcription': dict(transcription)
     }
 
+    os.makedirs(os.path.dirname(caminho_saida), exist_ok=True)
     with open(caminho_saida, "w", encoding="utf-8") as f:
         json.dump(
             transcription_dict,

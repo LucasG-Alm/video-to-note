@@ -2,6 +2,7 @@
 .venv/
 venv/
 data/**/Plataforma_Finclass/
+**/mongo/**
 
 # Arquivos de dependências
 poetry.lock

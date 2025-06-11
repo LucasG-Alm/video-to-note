@@ -6,6 +6,7 @@ from src.core.notes import *
 from src.core.file_handler import *
 
 from src.services.transcription import *
+from src.services.youtube import *
 
 #Video -> Audio
 #videos = listar_arquivos("src\\01. video_aulas")

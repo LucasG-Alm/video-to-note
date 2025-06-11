@@ -1,14 +1,14 @@
 ---
-page: "[[{YouTube}]]"
+page: "[[YouTube]]"
 Área: 
-    -{area}
+    -{{area}}
 tags:
-    - {tags_md}
-Link: {link}
-time: {duracao}
-autor: "[[{Canal_video}]]"
-data_video: {data_upload}
-data_nota: {data}
+    - {{tags_md}}
+Link: {{source}}
+time: {{duracao_formatada}}
+autor: "[[{{uploader_id}}]]"
+data_video: {{date_upload}}
+data_nota: {{date}}
 status:
 revisao:
 ---
