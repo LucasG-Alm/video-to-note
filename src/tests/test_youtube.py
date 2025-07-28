@@ -68,17 +68,8 @@ def Youtube_to_Notes(url_videos:list, model:str='llama-3.3-70b-versatile', pasta
 # Lista de vídeos
 videos = [
     #"https://www.youtube.com/shorts/2DGce61n8rY",
-    "https://www.youtube.com/watch?v=CVXsLyRC1bY&t=2852s",
-    "https://www.youtube.com/watch?v=aMJUnOeOs2k",
-    "https://www.youtube.com/watch?v=54GMOi4wnk8",
-    "https://www.youtube.com/watch?v=5HTd-PRCrho",
-    "https://www.youtube.com/watch?v=zT9mZK7FFTY",
-    "https://www.youtube.com/watch?v=oQ0RlP4v5LU&t=658s",
-    "https://www.youtube.com/watch?v=_Hl9wiLkns4",
-    "https://www.youtube.com/watch?v=FfigYiI2fKc",
-    "https://www.youtube.com/watch?v=36zqOsx1kYo&t=285s",
 ]
-# Youtube_to_Notes(videos)
+Youtube_to_Notes(videos)
 
 Links = {
     '2025-07-14': [
