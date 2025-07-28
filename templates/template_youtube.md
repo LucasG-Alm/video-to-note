@@ -6,7 +6,7 @@ tags:
     - {{tags_md}}
 Link: {{source}}
 time: {{duracao_formatada}}
-autor: "[[{{uploader_id}}]]"
+autor: "[[{{uploader}}]]"
 data_video: {{date_upload}}
 data_nota: {{date}}
 status:
@@ -25,11 +25,13 @@ Siga rigorosamente os tópicos e formatos abaixo:
 
 ---
 ## Resumo:
-Escreva um resumo conciso que capture o objetivo central, os principais conceitos abordados e a proposta do conteúdo. Evite rodeios e vá direto ao ponto. Máximo 8 linhas.
+Escreva um resumo conciso que capture o objetivo central, os principais conceitos abordados e a proposta do conteúdo, instigue a pessoa a ver e ficar curiosa com o conteúdo do video. Evite rodeios e vá direto ao ponto.
+
+mantenha a thumbnail: ![thumbnail]({{thumbnail}})
 
 ---
 ### Termos e Referências Principais:
-Liste todos os termos técnicos, conceitos, metodologias, ferramentas, cursos, pessoas e empresas citadas. Para cada termo:
+Liste todos os versículos e passagens da biblia, termos técnicos, conceitos, metodologias, ferramentas, cursos, pessoas e empresas citadas. Para cada termo:
 - Use o formato **[[Termo]]** (com colchetes duplos).
 - Inclua uma breve definição ou explicação objetiva.
 
@@ -38,15 +40,16 @@ Liste todos os termos técnicos, conceitos, metodologias, ferramentas, cursos, p
 Liste todos os links mencionados no vídeo, cursos, livros, sites e materiais recomendados, no seguinte formato:
 - [Nome](URL) - Descrição curta.
 
+você tem acesso a descrição para complementar as informações:
+{{description}}
+
 ---
 ### Minutagem:
 Se o video possuir capitulos com as minutagens insira nesse campo.
 Caso não possua, mapeie os momentos mais relevantes do conteúdo com o seguinte padrão:
 - <Minuto no formato M:SS> - **<Tema ou Assunto Abordado>**
+{{capitulos}}
 
----
-### Palavras-chave:
-Liste palavras-chave altamente relevantes para organização, busca e indexação do conteúdo.
 
 ---
 ⚠️ **Regras Importantes:**

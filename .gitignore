@@ -1,7 +1,8 @@
 # Ambiente virtual
 .venv/
 venv/
-data/**/Plataforma_Finclass/
+data/**/Plataform*
+data/**/Youtube*
 **/mongo/**
 
 # Arquivos de dependências
@@ -10,15 +11,16 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.cookies.txt
 
 # Configurações do VSCode
 .vscode/
 
 # Dados e arquivos gerados
-*.mp3
-*.mkv
-*.mp4
-*.wav
+#*.mp3
+#*.mkv
+#*.mp4
+#*.wav
 
 
 *.bak
@@ -30,3 +32,4 @@ __pycache__/
 # Outros
 .DS_Store
 Thumbs.db 
+*.zip

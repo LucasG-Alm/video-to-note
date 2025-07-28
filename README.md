@@ -63,11 +63,13 @@ data/
 ├── 01. videos/          # Vídeos de entrada
 │   └── *Estrutura de pastas desejada*/
 ├── 02. audio/           # Áudios extraídos
+│   ├── Youtube/
 │   └── *Estrutura de pastas desejada*/
 ├── 03. transcriptions/  # Transcrições em texto
 │   ├── Youtube/
 │   └── *Estrutura de pastas desejada*/
 ├── 04. notes/           # Notas Markdown geradas
+│   ├── Youtube/
 │   └── *Estrutura de pastas desejada*/
 ```
 
@@ -118,16 +120,40 @@ poetry run python src/app_youtube.py
 |Gerador de Templates|🕐 Planejado|
 |Auto-Linkagem Inteligente|🕐 Ideia|
 |Plugin para Obsidian|🕐 Visão Futuro|
+|Videos Longos no Youtube | 🕐 Planejado|
 
 ## 💡 Ideias Futuras
 - Geração automática de templates baseados em exemplos.
 - Detecção de tópicos recorrentes no vault (Análise de Grafo).
 - Auto-Linkagem entre notas.
 
-# 🙋‍♂️ Sobre o Autor
-👋 Lucas — Tecnólogo em Edifícios, aficionado por dados e eterno curioso.
-Apaixonado por conhecimento, automações e IA aplicadas à vida real.
-Se quiser trocar uma ideia, colaborar ou sugerir melhorias, bora conversar!
-
 # 📜 Licença
 MIT License – Use, adapte, compartilhe, só não seja um vacilão. 😎
+
+---
+
+## 🆕 Novidades e Atualizações
+
+### Funcionalidades Recentes
+- 🖥️ **Interface Streamlit para Vídeos Locais:**
+  - Visualize o status de vídeos, áudios, transcrições e notas em uma interface interativa.
+  - Permite processar arquivos manualmente ou em lote (extrair áudio, transcrever, gerar nota).
+  - Edição rápida do status dos arquivos e processamento por caminho manual.
+- 📝 **Nova Pipeline de Notas (notes2.py):**
+  - Geração de notas Markdown a partir de templates dinâmicos com variáveis.
+  - Integração com LLM (LangChain + Groq) para resumos e estruturação automática.
+  - Metadados enriquecidos, como duração formatada e preenchimento automático de campos.
+- 🗄️ **Integração com MongoDB:**
+  - Modelos Pydantic para vídeos e transcrições.
+  - Scripts de exemplo para salvar e consultar dados no banco.
+  - Estrutura pronta para escalabilidade e armazenamento centralizado.
+- 🎬 **Aprimoramentos YouTube:**
+  - Extração de metadados mais completa e robusta.
+  - Download de áudio e fallback para transcrição via Whisper caso não haja legenda.
+  - Funções para sanitizar nomes de arquivos e organizar melhor os dados.
+
+### Mudanças na Estrutura do Projeto
+- Nova pasta `src/interfaces/` para interfaces gráficas (ex: local-videos.py).
+- Nova pasta `src/services/mongo/` para integração e modelos do MongoDB.
+- Novo arquivo `notes2.py` em `src/core/` para pipeline de notas baseada em templates.
+- Modularização aprimorada e separação clara entre core, serviços, utilitários e interfaces.

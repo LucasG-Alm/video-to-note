@@ -49,6 +49,8 @@ def obter_informacoes_arquivos(pasta):
     #print(informacoes_arquivos)
     return informacoes_arquivos
 
+
+
 def arquivo_mais_recente(pasta, tipo_arquivo=None, data="tempo_acesso"):
     arquivos = obter_informacoes_arquivos(pasta)
     df_arquivos = pd.DataFrame(arquivos)

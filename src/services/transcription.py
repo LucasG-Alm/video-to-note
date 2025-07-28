@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
 from tqdm import tqdm
 import time
 from datetime import datetime
@@ -5,6 +9,7 @@ import os
 import json
 from groq import Groq
 from pydub import AudioSegment
+from src.core.audio import cortar_audio_por_silencio, cortar_audio_hibrido
 
 #from src.utils.utils import *
 def print_hex_color(hex_color, msg, msg2=""):
@@ -30,6 +35,43 @@ def transcrever_audio(caminho_arquivo: str, idioma="pt", contexto="", model: str
         )
         #print(json.dumps(transcription, indent=2, default=str))
     return transcription
+
+def transcrever_audio_inteligente(caminho_audio: str, idioma="pt", contexto="", model="whisper-large-v3-turbo", limite_mb=25):
+    """
+    Pipeline principal:
+    - Se arquivo <= limite_mb transcreve direto
+    - Se > limite_mb corta por silêncio, transcreve cada chunk e junta o texto
+    """
+    tamanho_mb = os.path.getsize(caminho_audio) / (1024 * 1024)
+    print(f"Tamanho do áudio: {tamanho_mb:.2f} MB")
+
+    if tamanho_mb <= limite_mb:
+        print("Arquivo pequeno, transcrevendo direto...")
+        return transcrever_audio(caminho_audio, idioma, contexto, model)
+    
+    print("Arquivo grande demais, cortando e transcrevendo chunks...")
+    arquivos_chunks = cortar_audio_hibrido(
+        caminho_audio,
+        modo="tamanho",
+        tamanho_max_mb=limite_mb,
+        cortar_por_silencio=False  # Opcional
+        )
+
+    transcricoes = []
+    for chunk_path in arquivos_chunks:
+        resultado = transcrever_audio(chunk_path, idioma, contexto, model)
+        print(resultado)
+        texto = resultado.text # ajustar conforme retorno real da API
+        transcricoes.append(texto)
+    
+    texto_final = "\n\n".join(transcricoes)
+    
+    # Opcional: salvar texto final num arquivo
+    with open("transcricao_final.txt", "w", encoding="utf-8") as f:
+        f.write(texto_final)
+    
+    print(f"Transcrição final compilada em 'transcricao_final.txt'")
+    return {"text": texto_final}
 
 def salvar_transcricao(metadata: dict, transcription, caminho_saida: str):
     def conversao_forcada(obj):
@@ -57,32 +99,6 @@ def salvar_transcricao(metadata: dict, transcription, caminho_saida: str):
     print_hex_color("#0bd271", "✅ Transcrição salva em: ", caminho_saida)
 
 
-if __name__ == "__main__":
-    caminho_audio = "data\\02. audio\\Plataforma_Finclass\\01. Como funciona a Finclass - 2025-05-12 15-34-07.mp3"
-    saida_json = "data\\03. transcriptions\\Plataforma_Finclass\\01. Como funciona a Finclass - 2025-05-12 15-34-07.json"
-    os.makedirs("data\\03. transcriptions\\Plataforma_Finclass\\", exist_ok=True)
 
-    model = "whisper-large-v3-turbo"
-    transcricao = transcrever_audio(caminho_audio, idioma="pt", contexto="Curso de Finanças", model=model)
-    nome_base = os.path.basename(caminho_audio).rsplit(".", 1)[0]
-    duracao_segundos = len(AudioSegment.from_mp3(caminho_audio)) / 1000
-    info = os.stat(caminho_audio)
-    
-    #Add Modelo e arquivo de base para transcrição
-    metadata = {
-        "transcription_by": model,
-        "api": 'groq', # caso mudar a api de consumo, mudar aqui
-        "type_file": 'local_file',
-        "source": caminho_audio,
-        "date_generated": datetime.now().strftime("%d/%m/%Y %H:%M"),
-        'title': nome_base,
-        'duration_sec': duracao_segundos,
-        'date_create_file': datetime.fromtimestamp(info.st_ctime).strftime("%d/%m/%Y %H:%M"),
-        'size_file_mb': round(info.st_size / (1024 * 1024), 2)
-    }
-
-    salvar_transcricao(metadata, transcricao, saida_json)
-
-    print("✅ Transcrição salva em: ", saida_json)
 
 

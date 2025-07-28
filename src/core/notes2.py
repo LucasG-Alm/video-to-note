@@ -44,6 +44,23 @@ def preencher_variables(yaml_str, contexto: dict):
 #print(dados['metadata'])
 #t = preencher_variables(ler[0], dados['metadata'])
 
+def gerar_capitulos_formatado(capitulos: list) -> str:
+    def segundos_para_minutos(segundos):
+        minutos = int(segundos // 60)
+        segundos_restantes = int(segundos % 60)
+        return f"{minutos}:{segundos_restantes:02d}"
+
+    linhas = []
+    if capitulos:
+        for cap in capitulos:
+            tempo = segundos_para_minutos(cap['start_time'])
+            linhas.append(f"- {tempo} - **{cap['title']}**")
+    else:
+        resultado = ""
+
+    resultado = "\n".join(linhas)
+    return resultado
+
 def gerar_nota_md(
     path_transcricao_json: str,
     path_template_md: str,
@@ -61,25 +78,28 @@ def gerar_nota_md(
 
     transcricao = dados.get("transcription", {}).get("text", "")
     metadata_json = dados.get("metadata", {})
+    capitulos = gerar_capitulos_formatado(dados.get("metadata", {}).get("chapters", ""))
     duracao = metadata_json.get("duration_sec", 0)
+    data_atual = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     horas = int(duracao // 3600)
     minutos = int((duracao % 3600) // 60)
     segundos = int(duracao % 60)
     duracao_formatada = f"{horas}h{minutos:02d}m{segundos:02d}s"
 
-    metadata_final = {**metadata_json, **(metadata or {}), **{'duracao_formatada': duracao_formatada}}
+    metadata_final = {**metadata_json, **(metadata or {}), **{'date': data_atual}, **{'capitulos': capitulos}, **{'duracao_formatada': duracao_formatada}}
 
     # 🎯 Leitura do template
     yaml_raw, prompt_raw = ler_md_template(path_template_md)
 
     # 🏗️ Montagem
     yaml_preenchido = preencher_variables(yaml_raw, metadata_final)
-    print(yaml_preenchido)
+    #print(yaml_preenchido)
     prompt_final = preencher_variables(prompt_raw, metadata_final)
+    #print(prompt_final)
 
     # 🔐 LLM
     load_dotenv()
-    chat = ChatGroq(model='llama-3.3-70b-versatile')
+    chat = ChatGroq(model=model)
 
     template = f"""
 {prompt_final}
@@ -104,16 +124,19 @@ Transcrição:
     with open(path_saida, 'w', encoding='utf-8') as f:
         f.write(nota_final)
 
-    print_hex_color('#0bd271', f"✅ Nota salva em: ",f"{path_saida}")
+    print_hex_color('#0bd271', f"✅ Nota salva em:",f"{path_saida}")
     return path_saida
 
 # ▶️ TESTE DE EXECUÇÃO
 if __name__ == "__main__":
     gerar_nota_md(
         #title="Teste",
-        path_transcricao_json="C:\\Users\\lucas\\OneDrive\\Documentos\\PROGRAMAÇÃO\\Python\\Doc courses\\data\\03. transcriptions\\Youtube\\Como se tornar um profissional raro no mercado..json",
-        path_template_md="C:\\Users\\lucas\\OneDrive\\Documentos\\PROGRAMAÇÃO\\Python\\Doc courses\\src\\templates\\template_youtube.md",
+        path_transcricao_json="D:\\Users\\Lucas\\OneDrive\\Documentos\\PROGRAMAÇÃO\\Python\\Doc courses\\data\\03. transcriptions\\Youtube\\AUTORIDADE INSTANTANEA_ 15 tecnicas PROIBIDAS para PERSUASAO absoluta.json",
+        path_template_md="D:\\Users\\Lucas\\OneDrive\\Documentos\\PROGRAMAÇÃO\\Python\\Doc courses\\templates\\template_youtube copy.md",
         metadata={
+            "area": "",
             "tags_md": "finanças\n    - produtividade\n    - aprendizado"
         }
     )
+
+

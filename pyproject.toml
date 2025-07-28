@@ -1,10 +1,11 @@
 [project]
-name = "doc-courses"
+name = "video-to-notes"
 version = "0.1.0"
-description = "Carregue Links de cursos/videos ou arquivos locais e converta em notas de estudos"
+description = "Converta videos locais e do youtube em notas markdown personalizadas"
 authors = [
     {name = "Lucas Gabriel de Almeida",email = "156014432+LucasG-Alm@users.noreply.github.com"}
 ]
+license = {text = "MIT"}
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 dependencies = [
@@ -26,7 +27,14 @@ dependencies = [
     "pymongo (>=4.13.0,<5.0.0)",
     "pydantic (>=2.11.5,<3.0.0)",
     "python-dateutil (>=2.9.0.post0,<3.0.0)",
+    "yt-dlp-ytse (>=0.4.3,<0.5.0)",
+    "openpyxl (>=3.1.5,<4.0.0)",
+    "jupyter (>=1.1.1,<2.0.0)",
+    
 ]
+
+[tool.poetry]
+package-mode = false
 
 
 [build-system]
