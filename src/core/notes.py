@@ -72,10 +72,11 @@ revisao:
 """
     # 🔐 Carregar API Key
     load_dotenv()
-    # 🧠 Definir o LLM
     api_key = os.getenv('GROQ_API_KEY')
-    os.environ['GROQ_API_KEY'] = api_key
-    chat = ChatGroq(model='llama-3.3-70b-versatile')
+    if not api_key:
+        raise ValueError("GROQ_API_KEY não encontrada. Verifique o arquivo .env")
+    # 🧠 Definir o LLM
+    chat = ChatGroq(model='llama-3.3-70b-versatile', api_key=api_key)
 
     # 🎯 Template do Prompt
     template = """

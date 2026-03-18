@@ -26,12 +26,9 @@ def Youtube_to_Notes(url_videos:list, model:str='llama-3.3-70b-versatile', pasta
                     'segments': transcript
                 }
             else:
-                print_hex_color('#f92f60', "❌ Não foi possível extrair o transcript.")
-                break
-                # Baixa o áudio e transcreve com Whisper da Groq
-                audio_path = f"data\\02. audio\\Youtube\\{title}.mp3"
+                print_hex_color('#f92f60', "❌ Sem legenda disponível, tentando Whisper...")
                 print_hex_color("#ffaa00", "⚠️  Baixando áudio para transcrição com Whisper...")
-                
+
                 audio_path_result = download_audio_from_youtube(url)
                 if audio_path_result:
                     final_transcript = transcrever_audio_inteligente(audio_path_result)
@@ -65,11 +62,12 @@ def Youtube_to_Notes(url_videos:list, model:str='llama-3.3-70b-versatile', pasta
         print(f"Aguardando {round(delay,2)} segundos pra não tomar bloco 🚫")
         time.sleep(delay)
 
-# Lista de vídeos
-videos = [
-    #"https://www.youtube.com/shorts/2DGce61n8rY",
-]
-Youtube_to_Notes(videos)
+if __name__ == "__main__":
+    # Lista de vídeos
+    videos = [
+        #"https://www.youtube.com/shorts/2DGce61n8rY",
+    ]
+    Youtube_to_Notes(videos)
 
 Links = {
     '2025-07-14': [
@@ -117,4 +115,5 @@ def processar_links(links_dict):
         except Exception as e:
             print(f"❌ Erro ao processar {links}: {e}")
 
-processar_links(Links)
+if __name__ == "__main__":
+    processar_links(Links)

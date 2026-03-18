@@ -63,9 +63,9 @@ def arquivo_mais_recente(pasta, tipo_arquivo=None, data="tempo_acesso"):
     # Ordenar por data
     df_arquivos = df_arquivos.sort_values(by=data)
 
-    arquivo = df_arquivos[0]
+    arquivo = df_arquivos.iloc[0]
 
-    return df_arquivos
+    return arquivo
 
 def criar_pasta_do_dia(df, caminho_base, nome):
     # Obtém a data atual

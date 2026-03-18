@@ -11,12 +11,7 @@ from groq import Groq
 from pydub import AudioSegment
 from src.core.audio import cortar_audio_por_silencio, cortar_audio_hibrido
 
-#from src.utils.utils import *
-def print_hex_color(hex_color, msg, msg2=""):
-    r = int(hex_color[1:3], 16)
-    g = int(hex_color[3:5], 16)
-    b = int(hex_color[5:7], 16)
-    print(f"\033[38;2;{r};{g};{b}m{msg}\033[0m {msg2}")
+from src.utils.utils import print_hex_color
 
 def transcrever_audio(caminho_arquivo: str, idioma="pt", contexto="", model: str="whisper-large-v3-turbo"):
     client = Groq() # caso mudar a api de consumo, mudar a api dos metadados
