@@ -31,5 +31,9 @@ __pycache__/
 
 # Outros
 .DS_Store
-Thumbs.db 
+Thumbs.db
 *.zip
+
+# Pessoal / local
+_local/
+doc-sites.py
