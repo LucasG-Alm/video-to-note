@@ -1,159 +1,126 @@
-# 🎥 Videos to Notes – Organize seu Conhecimento em Markdown
+# 🎥 Media to Notes
 
-Transforme vídeos em notas estruturadas no Obsidian.  
-Resumos automáticos, transcrição, templates personalizáveis e muito mais.  
+Converta vídeos do YouTube e arquivos locais de áudio/vídeo em notas Markdown estruturadas para o Obsidian.
 
-> ⚠️ **Uso Pessoal & Educacional:**  
+Pipeline: **URL ou arquivo → transcrição (Groq Whisper) → nota (LLM)** com templates por profundidade.
+
+> ⚠️ **Uso Pessoal & Educacional:**
 > Este projeto não distribui nem incentiva a reprodução de conteúdos protegidos por direitos autorais. Seu objetivo é servir como ferramenta pessoal de organização de conhecimento a partir de conteúdos de uso próprio ou de acesso livre.
 
 ---
 
-## 🧠 Funcionalidades
-- 🎥 **Videos e audios locais:** Processamentos de arquivos locais salvos em data\01. videos
-- 🎯 **Transcrição Automática:** Convertendo vídeo → áudio → texto (via Whisper).
-- 📝 **Geração de Notas Markdown:** Organizadas com resumo, tópicos, palavras-chave e questionamentos.
-- 🔗 **Organização para Obsidian:** Compatível com Zettelkasten, mapas mentais e sistemas de PKM.
-- 🌐 **Suporte a YouTube:** Processamento de vídeos do youtube via links.
-- 🎨 **Templates Personalizados:** Layout das notas 100% configurável.
-- 📂 **Gestão Visual (via Streamlit):** Interface para controlar todo o fluxo.
+## Funcionalidades
+
+- 🌐 **YouTube** — extrai legenda automática via yt-dlp; cai no Whisper se não houver
+- 🎵 **Arquivos locais** — `.mp3`, `.mp4`, `.wav`, `.m4a`, `.mkv`, `.webm` e outros
+- ✂️ **Chunking automático** — arquivos > 25 MB são cortados antes de transcrever
+- 📝 **4 níveis de profundidade** — de bullets rápidos até análise crítica ou reflexão metacognitiva
+- 🎨 **Templates customizáveis** — Markdown com variáveis preenchidas automaticamente
+- 🤖 **Claude Code skill** — processa mídia direto de uma conversa com o Claude
 
 ---
 
-## 🚀 Tecnologias Utilizadas
-- 🐍 **Python 3.10+**
-- 📜 **Whisper** – Transcrição automática
-- 🎥 **YouTube API** – Metadados e Transcrição
-- 📊 **Streamlit** – Interface gráfica
-- 🗄️ **MongoDB** (planejado) – Banco de dados para escalabilidade
-- 🧠 **Poetry** – Gerenciamento de dependências
+## Instalação
+
+```bash
+git clone https://github.com/LucasG-Alm/video-to-note
+cd video-to-note
+poetry install
+cp .env.example .env  # adicione sua GROQ_API_KEY
+```
+
+**Requisitos:** Python 3.11+, [FFmpeg](https://ffmpeg.org/) no PATH, chave de API da [Groq](https://console.groq.com/).
 
 ---
-## 🗂️ Estrutura do Projeto
+
+## Uso
+
+```bash
+# Vídeo do YouTube
+poetry run mtn youtube "https://youtube.com/watch?v=..."
+
+# Com profundidade e pasta de saída customizadas
+poetry run mtn youtube "url" --depth avancado --output "~/vault/_revisar/"
+
+# Arquivo local
+poetry run mtn local "audio.mp3"
+poetry run mtn local "video.mp4" --depth metacognitivo
+```
+
+### Níveis de profundidade (`--depth`)
+
+| Nível | Estilo da nota |
+|-------|---------------|
+| `raso` | Bullets rápidos, máximo 10 linhas |
+| `intermediario` | Resumo + pontos principais + aplicações práticas *(padrão)* |
+| `avancado` | Tese central, frameworks, análise crítica, interconexões |
+| `metacognitivo` | Reflexão profunda, tensões, impacto pessoal |
+
+---
+
+## Arquitetura
+
 ```
 src/
-├── core/                # Núcleo do projeto
-│   ├── file_handler.py
-│   ├── notes.py
-│   ├── converter.py
-│   ├── audio.py
-│   └── __init__.py
-│
-├── services/            # Serviços externos
-│   ├── transcription.py
-│   ├── youtube.py
-│   ├── youtube-ai.py
-│   ├── mongodb.py
-│   └── __init__.py
-│
-├── utils/               # Funções auxiliares
-│   ├── utils.py
-│   └── __init__.py
-│
-├── templates/           # Templates de notas
-│   ├── template_youtube.md
-│   └── template_curso.md
-│
-├── app_youtube.py       # Interface para YouTube
-├── prompts.py           # Prompts e textos auxiliares
-├── __init__.py
-└── app.py               # Interface principal (Streamlit)
+├── cli.py              # Entry point — mtn youtube / mtn local
+├── pipeline.py         # Orquestra o fluxo para cada tipo de entrada
+├── services/
+│   ├── youtube.py      # yt-dlp: metadados, legenda, download de áudio
+│   └── transcription.py # Groq Whisper API (com chunking para arquivos grandes)
+├── core/
+│   ├── notes2.py       # Geração de nota via LangChain + Groq LLM
+│   └── audio.py        # Corte de áudio por silêncio/tamanho (pydub/moviepy)
+└── utils/utils.py
 
-
-data/
-├── 01. videos/          # Vídeos de entrada
-│   └── *Estrutura de pastas desejada*/
-├── 02. audio/           # Áudios extraídos
-│   ├── Youtube/
-│   └── *Estrutura de pastas desejada*/
-├── 03. transcriptions/  # Transcrições em texto
-│   ├── Youtube/
-│   └── *Estrutura de pastas desejada*/
-├── 04. notes/           # Notas Markdown geradas
-│   ├── Youtube/
-│   └── *Estrutura de pastas desejada*/
+templates/              # Templates Markdown por nível de profundidade
+tests/                  # Testes unitários (pytest)
+data/                   # Runtime — gitignored
+  02. audio/
+  03. transcriptions/
+  04. notes/
 ```
 
 ---
-## 🚀 Como Usar
 
-### ✅ Pré-requisitos
-- Python 3.10 ou superior
-- Instalar dependências:
+## Claude Code Skill
 
+Este repositório inclui uma skill para o [Claude Code](https://claude.ai/code) em `.claude/skills/media-to-notes.md`.
+
+Com ela instalada, basta dizer ao Claude:
+> *"processa esse vídeo: https://youtu.be/..."*
+
+e ele detecta a URL, pergunta o nível de profundidade e executa o pipeline automaticamente.
+
+**Instalação da skill:**
 ```bash
-poetry install
+cp .claude/skills/media-to-notes.md ~/.claude/plugins/local/skills/
 ```
-
-### ✅ Passo a Passo
-1. 🎥 Coloque os vídeos em data/videos/.
-
-2. 🚀 Execute:
-```bash
-poetry run python src/app.py
-```
-3. 🖥️ A interface Streamlit abrirá. Nela, você pode:
-- 🔊 Extrair áudio dos vídeos
-- 📝 Transcrever com Whisper
-- ✍️ Gerar notas com resumos, tópicos e questionamentos
-- 🎯 Organizar tudo no padrão Obsidian
-
-### 🌐 Integração com YouTube
-O projeto permite gerar notas diretamente a partir de links do YouTube.
-
-Funciona assim: (em anadamento)
-1. Cole a url do video em youtube.py
-2. Extrai metadados (título, canal, descrição, data)
-3. Obtém transcrição (quando disponível)
-4. Gera a nota Markdown
-
-Execute:
-```bash
-poetry run python src/app_youtube.py
-```
-
-# 🗺️ Roadmap e Futuro
-|🔥 Funcionalidade|🚧 Status|
-|------------------|--------|
-|Criar testes|🕐 Planejado|
-|Armazenamento MongoDB|🕐 Planejado|
-|Templates Dinâmicos|🕐 Em Progresso|
-|Gerador de Templates|🕐 Planejado|
-|Auto-Linkagem Inteligente|🕐 Ideia|
-|Plugin para Obsidian|🕐 Visão Futuro|
-|Videos Longos no Youtube | 🕐 Planejado|
-
-## 💡 Ideias Futuras
-- Geração automática de templates baseados em exemplos.
-- Detecção de tópicos recorrentes no vault (Análise de Grafo).
-- Auto-Linkagem entre notas.
-
-# 📜 Licença
-MIT License – Use, adapte, compartilhe, só não seja um vacilão. 😎
 
 ---
 
-## 🆕 Novidades e Atualizações
+## Testes
 
-### Funcionalidades Recentes
-- 🖥️ **Interface Streamlit para Vídeos Locais:**
-  - Visualize o status de vídeos, áudios, transcrições e notas em uma interface interativa.
-  - Permite processar arquivos manualmente ou em lote (extrair áudio, transcrever, gerar nota).
-  - Edição rápida do status dos arquivos e processamento por caminho manual.
-- 📝 **Nova Pipeline de Notas (notes2.py):**
-  - Geração de notas Markdown a partir de templates dinâmicos com variáveis.
-  - Integração com LLM (LangChain + Groq) para resumos e estruturação automática.
-  - Metadados enriquecidos, como duração formatada e preenchimento automático de campos.
-- 🗄️ **Integração com MongoDB:**
-  - Modelos Pydantic para vídeos e transcrições.
-  - Scripts de exemplo para salvar e consultar dados no banco.
-  - Estrutura pronta para escalabilidade e armazenamento centralizado.
-- 🎬 **Aprimoramentos YouTube:**
-  - Extração de metadados mais completa e robusta.
-  - Download de áudio e fallback para transcrição via Whisper caso não haja legenda.
-  - Funções para sanitizar nomes de arquivos e organizar melhor os dados.
+```bash
+poetry run pytest       # roda todos os testes
+poetry run pytest -v    # verbose
+```
 
-### Mudanças na Estrutura do Projeto
-- Nova pasta `src/interfaces/` para interfaces gráficas (ex: local-videos.py).
-- Nova pasta `src/services/mongo/` para integração e modelos do MongoDB.
-- Novo arquivo `notes2.py` em `src/core/` para pipeline de notas baseada em templates.
-- Modularização aprimorada e separação clara entre core, serviços, utilitários e interfaces.
+---
+
+## Roadmap
+
+| Funcionalidade | Status |
+|----------------|--------|
+| CLI com Typer | ✅ Concluído |
+| 4 templates de profundidade | ✅ Concluído |
+| Testes unitários (pytest) | ✅ Concluído |
+| Claude Code skill | ✅ Concluído |
+| Suporte a Shorts e URLs com timestamp | ✅ Concluído |
+| Armazenamento MongoDB | 🕐 Planejado |
+| Plugin nativo para Obsidian | 🔭 Visão futura |
+
+---
+
+## Licença
+
+MIT — use, adapte, compartilhe. 😎
