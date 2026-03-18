@@ -1,7 +1,8 @@
 import os
-from datetime import datetime
-import pandas as pd
 import shutil
+from datetime import datetime
+from pathlib import Path
+import pandas as pd
 from tqdm import tqdm
 
 tqdm.pandas()
@@ -83,7 +84,7 @@ def criar_pasta_do_dia(df, caminho_base, nome):
         os.makedirs(caminho_pasta_do_dia)
 
     # Constrói o nome do arquivo com a data
-    nome_arquivo = f'{caminho_pasta_do_dia}\{data_hora} - {nome}.csv'
+    nome_arquivo = str(Path(caminho_pasta_do_dia) / f"{data_hora} - {nome}.csv")
 
     # Salva o DataFrame no arquivo
     df.to_csv(nome_arquivo)

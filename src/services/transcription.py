@@ -1,16 +1,9 @@
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-
-from tqdm import tqdm
-import time
-from datetime import datetime
 import os
 import json
+from pathlib import Path
 from groq import Groq
 from pydub import AudioSegment
 from src.core.audio import cortar_audio_por_silencio, cortar_audio_hibrido
-
 from src.utils.utils import print_hex_color
 
 def transcrever_audio(caminho_arquivo: str, idioma="pt", contexto="", model: str="whisper-large-v3-turbo"):
@@ -61,11 +54,12 @@ def transcrever_audio_inteligente(caminho_audio: str, idioma="pt", contexto="", 
     
     texto_final = "\n\n".join(transcricoes)
     
-    # Opcional: salvar texto final num arquivo
-    with open("transcricao_final.txt", "w", encoding="utf-8") as f:
+    # Salva texto final próximo ao arquivo de origem
+    txt_path = Path(caminho_audio).with_suffix('.txt')
+    with open(txt_path, "w", encoding="utf-8") as f:
         f.write(texto_final)
-    
-    print(f"Transcrição final compilada em 'transcricao_final.txt'")
+
+    print(f"Transcrição final compilada em '{txt_path}'")
     return {"text": texto_final}
 
 def salvar_transcricao(metadata: dict, transcription, caminho_saida: str):

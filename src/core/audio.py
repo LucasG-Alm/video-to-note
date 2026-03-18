@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from tqdm import tqdm
 from moviepy import VideoFileClip
 from pydub import AudioSegment, silence
@@ -16,7 +17,7 @@ def cortar_audio_por_silencio(caminho_audio: str, pasta_saida="tmp\\audio", min_
     #Corta o áudio em chunks usando os silêncios.
     #Retorna lista de caminhos dos arquivos cortados.
 
-    title = caminho_audio.split('\\')[-1]
+    title = Path(caminho_audio).name
 
     if not os.path.exists(pasta_saida):
         os.makedirs(pasta_saida)
@@ -129,14 +130,10 @@ def cortar_audio_hibrido(
 
 
 if __name__ == "__main__":
-    #video = "src/01. video_aulas/Plataforma_Finclass/Trilha-Primeiros Passos/Inteligência Financeira/02. Corrigindo Vícios Sociais - 2025-05-13 15-49-58.mkv"
-    #mp3 = video.replace("01. video_aulas", "02. audio").split(".")[0]
-    #os.makedirs("/".join(video).split("/")[:-1], exist_ok=True)
-    #extrair_audio(video, mp3)
-
+    PROJECT_ROOT = Path(__file__).parent.parent.parent
     cortar_audio_hibrido(
-        arquivo_entrada="D:\\Users\\Lucas\\OneDrive\\Documentos\\PROGRAMAÇÃO\\Python\\Doc courses\\data\\02. audio\\Youtube\\Crescendo em meio a dor (ep.1).mp3",
+        arquivo_entrada=str(PROJECT_ROOT / "data/02. audio/Youtube/exemplo.mp3"),
         modo="tamanho",
         tamanho_max_mb=25,
-        cortar_por_silencio=False,  # Opcional
+        cortar_por_silencio=False,
     )

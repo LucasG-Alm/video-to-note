@@ -1,11 +1,12 @@
-import sys
 import os
 import time
 import random
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+from pathlib import Path
 
 from src.services.youtube import *
 from src.core.notes2 import gerar_nota_md
+
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 def Youtube_to_Notes(url_videos:list, model:str='llama-3.3-70b-versatile', pasta_destino:str=''):
     for url in url_videos:
@@ -38,16 +39,15 @@ def Youtube_to_Notes(url_videos:list, model:str='llama-3.3-70b-versatile', pasta
 
                 metadata['transcription_by'] = 'Groq Whisper API'
 
-            salvar_transcricao(metadata, final_transcript, f'data\\03. transcriptions\\Youtube\\{pasta_destino}\\{title}.json')
-            #print_hex_color('#0bd271', f"✅ Transcrição salva com sucesso.")
+            json_path = PROJECT_ROOT / "data/03. transcriptions/Youtube" / pasta_destino / f"{title}.json"
+            salvar_transcricao(metadata, final_transcript, str(json_path))
 
             try:
                 gerar_nota_md(
-                    path_transcricao_json=f'data\\03. transcriptions\\Youtube\\{pasta_destino}\\{title}.json',
-                    path_template_md="D:\\Users\\Lucas\\OneDrive\\Documentos\\PROGRAMAÇÃO\\Python\\Doc courses\\templates\\template_youtube copy.md",
+                    path_transcricao_json=str(json_path),
+                    path_template_md=str(PROJECT_ROOT / "templates/template_youtube copy.md"),
                     metadata={
-                    #"area": "Programação",
-                    "tags_md": "YouTube/Vídeo"
+                        "tags_md": "YouTube/Vídeo"
                     },
                     model=model
                 )
@@ -105,9 +105,8 @@ Links = {
 
 def processar_links(links_dict):
     for folder, links in links_dict.items():
-        # Cria a folder com nome da folder
-        os.makedirs(f'data\\03. transcriptions\\Youtube\\{folder}', exist_ok=True)
-        os.makedirs(f'data\\04. notes\\Youtube\\{folder}', exist_ok=True)
+        (PROJECT_ROOT / "data/03. transcriptions/Youtube" / folder).mkdir(parents=True, exist_ok=True)
+        (PROJECT_ROOT / "data/04. notes/Youtube" / folder).mkdir(parents=True, exist_ok=True)
         
         try:
             print(f"🔁 Processando folder: {folder}")

@@ -1,8 +1,6 @@
-import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-
 import re
+from pathlib import Path
 from yt_dlp import YoutubeDL
 from youtube_transcript_api import YouTubeTranscriptApi
 from datetime import datetime
@@ -155,8 +153,9 @@ def sanitize_filename(title, max_length=100):
     # Corta se for muito longo
     return title[:max_length]
 
-def download_audio_from_youtube(url, output_dir="data\\02. audio\\Youtube", extension_file="mp3"):
-    os.makedirs(output_dir, exist_ok=True)
+def download_audio_from_youtube(url, output_dir="data/02. audio/Youtube", extension_file="mp3"):
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
     try:
         with YoutubeDL({'quiet': True}) as ydl:
             info = ydl.extract_info(url, download=True)
@@ -166,7 +165,7 @@ def download_audio_from_youtube(url, output_dir="data\\02. audio\\Youtube", exte
         print_hex_color('#f92f60', f"❌ Erro ao baixar áudio: {e}")
         return None
 
-    output_path = os.path.join(output_dir, safe_title)
+    output_path = output_dir / safe_title
 
     ydl_opts = {
         'format': 'bestaudio/best',
@@ -186,4 +185,4 @@ def download_audio_from_youtube(url, output_dir="data\\02. audio\\Youtube", exte
         print_hex_color('#f92f60', f"❌ Erro ao processar o áudio: {e}")
         return None
 
-    return output_path + f".{extension_file}"
+    return str(output_path) + f".{extension_file}"

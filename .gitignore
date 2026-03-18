@@ -1,8 +1,13 @@
 # Ambiente virtual
 .venv/
 venv/
-data/**/Plataform*
-data/**/Youtube*
+
+# Dados gerados (transcrições, áudios, vídeos, notas geradas)
+data/
+*.opus
+*.ogg
+*.aac
+*.flac
 **/mongo/**
 
 # Arquivos de dependências

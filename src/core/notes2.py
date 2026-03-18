@@ -1,15 +1,13 @@
-import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-
 import re
-from langchain_groq import ChatGroq
-from langchain.prompts import ChatPromptTemplate
 import json
+from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
+from langchain_groq import ChatGroq
+from langchain.prompts import ChatPromptTemplate
 
-from src.utils.utils import *
+from src.utils.utils import print_hex_color
 
 def ler_md_template(caminho_md):
     with open(caminho_md, 'r', encoding='utf-8') as f:
@@ -25,9 +23,6 @@ def ler_md_template(caminho_md):
 
     return yaml, prompt
 
-#ler = ler_md_template('C:\\Users\\lucas\\OneDrive\\Documentos\\PROGRAMAÇÃO\\Python\\Doc courses\\src\\templates\\template_youtube.md')
-#print(ler[0])
-#print(len(ler))
 
 def preencher_variables(yaml_str, contexto: dict):
     def replacer(match):
@@ -38,11 +33,6 @@ def preencher_variables(yaml_str, contexto: dict):
     return re.sub(r'\{\{(.*?)\}\}', replacer, yaml_str)
 
 
-#with open('C:\\Users\\lucas\\OneDrive\\Documentos\\PROGRAMAÇÃO\\Python\\Doc courses\\data\\03. transcriptions\\Youtube\\FAÇA ISSO SEMPRE QUE RECEBER SEU SALÁRIO _ Como organizar suas finanças e guardar dinheiro.json', 'r', encoding='utf-8') as arquivo:
-#    dados = json.load(arquivo)
-
-#print(dados['metadata'])
-#t = preencher_variables(ler[0], dados['metadata'])
 
 def gerar_capitulos_formatado(capitulos: list) -> str:
     def segundos_para_minutos(segundos):
@@ -69,8 +59,8 @@ def gerar_nota_md(
     model: str = 'llama-3.3-70b-versatile'
 ):
     # 🔍 Extrai metadados do arquivo
-    if title == None:
-        title = path_transcricao_json.split("\\")[-1].split(" - ")[0]
+    if title is None:
+        title = Path(path_transcricao_json).stem.split(" - ")[0]
 
     # 🧠 Leitura da transcrição
     with open(path_transcricao_json, 'r', encoding='utf-8') as f:
@@ -99,7 +89,10 @@ def gerar_nota_md(
 
     # 🔐 LLM
     load_dotenv()
-    chat = ChatGroq(model=model)
+    api_key = os.getenv('GROQ_API_KEY')
+    if not api_key:
+        raise ValueError("GROQ_API_KEY não encontrada. Verifique o arquivo .env")
+    chat = ChatGroq(model=model, api_key=api_key)
 
     template = f"""
 {prompt_final}
@@ -116,27 +109,23 @@ Transcrição:
     nota_final = f"""---\n{yaml_preenchido}\n---\n{getattr(resultado, 'content', str(resultado))}"""
 
     # 💾 Salvar
-    pasta_saida = path_transcricao_json.replace("03. transcriptions", "04. notes")
-    pasta_saida = "\\".join(pasta_saida.split("\\")[:-1])
-    os.makedirs(pasta_saida, exist_ok=True)
+    pasta_saida = Path(str(Path(path_transcricao_json).parent).replace("03. transcriptions", "04. notes"))
+    pasta_saida.mkdir(parents=True, exist_ok=True)
 
-    path_saida = f"{pasta_saida}/{title}.md"
+    path_saida = pasta_saida / f"{title}.md"
     with open(path_saida, 'w', encoding='utf-8') as f:
         f.write(nota_final)
 
     print_hex_color('#0bd271', f"✅ Nota salva em:",f"{path_saida}")
     return path_saida
 
-# ▶️ TESTE DE EXECUÇÃO
 if __name__ == "__main__":
+    PROJECT_ROOT = Path(__file__).parent.parent.parent
     gerar_nota_md(
-        #title="Teste",
-        path_transcricao_json="D:\\Users\\Lucas\\OneDrive\\Documentos\\PROGRAMAÇÃO\\Python\\Doc courses\\data\\03. transcriptions\\Youtube\\AUTORIDADE INSTANTANEA_ 15 tecnicas PROIBIDAS para PERSUASAO absoluta.json",
-        path_template_md="D:\\Users\\Lucas\\OneDrive\\Documentos\\PROGRAMAÇÃO\\Python\\Doc courses\\templates\\template_youtube copy.md",
+        path_transcricao_json=str(PROJECT_ROOT / "data/03. transcriptions/Youtube/exemplo.json"),
+        path_template_md=str(PROJECT_ROOT / "templates/template_youtube copy.md"),
         metadata={
             "area": "",
-            "tags_md": "finanças\n    - produtividade\n    - aprendizado"
+            "tags_md": "YouTube/Vídeo"
         }
     )
-
-
