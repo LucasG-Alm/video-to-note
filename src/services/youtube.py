@@ -1,10 +1,7 @@
-import os
 import re
 from pathlib import Path
 from yt_dlp import YoutubeDL
-from youtube_transcript_api import YouTubeTranscriptApi
 from datetime import datetime
-from pprint import pprint
 import unicodedata
 
 from src.services.transcription import transcrever_audio, transcrever_audio_inteligente, salvar_transcricao
@@ -15,14 +12,6 @@ def extract_video_id(url):
     """Extrai o ID do vídeo do link do YouTube (watch, youtu.be e Shorts)."""
     match = re.search(r"(?:v=|youtu\.be/|shorts/)([a-zA-Z0-9_-]{11})", url)
     return match.group(1) if match else None
-
-def get_transcript(video_id):
-    """Pega a transcrição do vídeo."""
-    try:
-        return YouTubeTranscriptApi.get_transcript(video_id, languages=['pt'])
-    except Exception as e:
-        print_hex_color('#f92f60', f"❌ Sem transcrição disponível: {e}")
-        return []
 
 def get_transcript_with_yt_dlp(video_url, lang="pt"):
     """
