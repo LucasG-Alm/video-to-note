@@ -50,14 +50,14 @@ OUTPUT (.md pronto para Obsidian)
 
 ---
 
-## Níveis de Profundidade (a implementar no CLI)
+## Níveis de Profundidade
 
 | Nível | O que gera |
 |-------|------------|
-| **Raso** | Bullets rápidos, definições básicas |
-| **Intermediário** | Resumo + termos + aplicações |
-| **Avançado** | Frameworks, análises críticas, interconexões |
-| **Meta Cognitivo** | Reflexões sobre propósito, conexões pessoais |
+| **Raso** | Bullets rápidos, máximo 10 linhas |
+| **Intermediário** | Resumo + termos + aplicações práticas |
+| **Avançado** | Frameworks, análise crítica, interconexões |
+| **Meta Cognitivo** | Reflexão profunda, impacto pessoal, tensões |
 
 ---
 
@@ -65,26 +65,32 @@ OUTPUT (.md pronto para Obsidian)
 
 ```
 src/
+├── cli.py              ← Entry point: mtn youtube / mtn local
+├── pipeline.py         ← Orquestra o fluxo para cada tipo de entrada
 ├── core/
 │   ├── notes2.py       ← Geração de nota via LLM + templates
-│   ├── audio.py        ← Extração e chunking de áudio
-│   ├── converter.py    ← Conversão de formatos
-│   └── file_handler.py ← Utilitários de arquivo
+│   └── audio.py        ← Extração e chunking de áudio (lazy imports)
 ├── services/
-│   ├── youtube.py      ← Download, metadados, transcrição via yt-dlp
+│   ├── youtube.py      ← yt-dlp: metadados, legenda, download de áudio
 │   └── transcription.py ← Groq Whisper API (direto e chunked)
-├── utils/
-│   └── utils.py        ← print_hex_color (log colorido)
-└── interfaces/
-    └── app_youtube.py  ← Interface Streamlit (legado)
+└── utils/
+    └── utils.py        ← print_hex_color (log colorido)
 
 templates/
-├── template_youtube.md ← Template para vídeos do YouTube
-└── template_curso.md   ← Template para cursos/aulas
+├── template_youtube_raso.md
+├── template_youtube_intermediario.md
+├── template_youtube_avancado.md
+└── template_youtube_metacognitivo.md
+
+.claude/
+└── skills/
+    └── media-to-notes.md  ← Skill instalável para o Claude Code
 
 tests/
-├── test_youtube_utils.py   ← 15 testes unitários
-└── test_notes2_utils.py    ← 13 testes unitários
+├── test_youtube_utils.py   ← 15 testes
+├── test_notes2_utils.py    ← 13 testes
+├── test_pipeline_utils.py  ← 7 testes
+└── test_cli.py             ← 12 testes
 ```
 
 ---
@@ -114,27 +120,40 @@ tests/
 
 ### ✅ Sprint 3 — Testes Unitários (concluído)
 
-28 testes, 0 falhas, 0.75s de execução.
+28 testes, 0 falhas.
 
 | Arquivo de Teste | Funções Cobertas |
 |-----------------|-----------------|
-| `test_youtube_utils.py` | `extract_video_id` (7 casos), `sanitize_filename` (5 casos), `transcript_to_text` (3 casos) |
-| `test_notes2_utils.py` | `gerar_capitulos_formatado` (5 casos), `preencher_variables` (5 casos), `ler_md_template` (3 casos) |
+| `test_youtube_utils.py` | `extract_video_id` (7), `sanitize_filename` (5), `transcript_to_text` (3) |
+| `test_notes2_utils.py` | `gerar_capitulos_formatado` (5), `preencher_variables` (5), `ler_md_template` (3) |
 
-**Bug encontrado pelos testes:** `extract_video_id` não suportava URLs de Shorts (`/shorts/XXXXXXXXXXX`) — regex corrigida.
+**Bug encontrado pelos testes:** `extract_video_id` não suportava URLs de Shorts — regex corrigida.
+
+### ✅ Sprint 4 — CLI com Typer (concluído)
 
 ```bash
-# Como rodar
-poetry run pytest -v
+poetry run mtn youtube "https://youtu.be/..." --depth avancado
+poetry run mtn local "audio.mp3" --depth metacognitivo --output "~/vault/_revisar/"
 ```
 
-### 🔄 Sprint 4 — CLI (em andamento)
+| Arquivo | O que faz |
+|---------|-----------|
+| `src/cli.py` | Entry point Typer com comandos `youtube` e `local` |
+| `src/pipeline.py` | Lógica de negócio para cada tipo de entrada |
+| `templates/template_youtube_*.md` | 4 templates por nível de profundidade |
 
-Adicionar interface de linha de comando para que a skill Claude Code possa chamar o projeto como engine.
+Mais 19 testes adicionados (total: **47 testes, 0 falhas**).
 
-### ⏳ Sprint 5 — Skill Claude Code
+### ✅ Sprint 5 — Claude Code Skill (concluído)
 
-Criar `obsidian:media-to-notes` — skill que usa o CLI como engine e cuida da orquestração inteligente (escolha de template, pasta de destino, frontmatter, wikilinks).
+Skill instalável em `.claude/skills/media-to-notes.md`. Permite ao Claude Code processar mídia diretamente de uma conversa:
+
+> *"processa esse vídeo: https://youtu.be/..."*
+
+Instalação:
+```bash
+cp .claude/skills/media-to-notes.md ~/.claude/plugins/local/skills/
+```
 
 ---
 
@@ -147,8 +166,9 @@ poetry install
 # Rodar testes
 poetry run pytest -v
 
-# Streamlit (interface legada)
-poetry run streamlit run src/interfaces/app_youtube.py
+# CLI
+poetry run mtn youtube "https://youtu.be/..."
+poetry run mtn local "audio.mp3" --depth avancado
 ```
 
 ---
@@ -165,9 +185,12 @@ GROQ_API_KEY=gsk_...
 
 ## Roadmap
 
-- [ ] Sprint 4: CLI com argparse/typer
-- [ ] Sprint 5: Skill `obsidian:media-to-notes`
-- [ ] Integração direta com vault Obsidian (output em `_revisar/`)
-- [ ] Suporte a WhatsApp/Telegram (já existe parcialmente)
-- [ ] Níveis de profundidade no output (Raso → Meta Cognitivo)
-- [ ] Testes de integração com mock da Groq API
+| Funcionalidade | Status |
+|----------------|--------|
+| CLI com Typer | ✅ Concluído |
+| 4 templates de profundidade | ✅ Concluído |
+| Testes unitários (47 testes) | ✅ Concluído |
+| Claude Code skill | ✅ Concluído |
+| Suporte a Shorts e URLs com timestamp | ✅ Concluído |
+| Testes mockados para APIs externas (Groq, yt-dlp) | 🕐 Implementação futura |
+| Pesquisa ao estilo Perplexity — busca + síntese + citações | 🔭 Ideia futura |

@@ -116,8 +116,8 @@ poetry run pytest -v    # verbose
 | Testes unitários (pytest) | ✅ Concluído |
 | Claude Code skill | ✅ Concluído |
 | Suporte a Shorts e URLs com timestamp | ✅ Concluído |
-| Armazenamento MongoDB | 🕐 Planejado |
-| Plugin nativo para Obsidian | 🔭 Visão futura |
+| Testes mockados para APIs externas (Groq, yt-dlp) | 🕐 Implementação futura |
+| Pesquisa ao estilo Perplexity — busca + síntese + citações | 🔭 Ideia futura |
 
 ---
 
