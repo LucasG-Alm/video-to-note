@@ -1,21 +1,21 @@
 import os
 from pathlib import Path
 from tqdm import tqdm
-from moviepy import VideoFileClip
-from pydub import AudioSegment, silence
-from pydub.silence import split_on_silence
 
 
 def extrair_audio(video_path, audio_path):
+    from moviepy import VideoFileClip  # lazy: só carrega quando necessário
     video = VideoFileClip(video_path)
     audio = video.audio
     # Codec correto para MP3
     audio.write_audiofile(audio_path, codec='libmp3lame', fps=44100)
     print(f"✅ Áudio extraído para: {audio_path}")
 
-def cortar_audio_por_silencio(caminho_audio: str, pasta_saida="tmp\\audio", min_silence_len=700, silence_thresh=-40, keep_silence=500):
-    #Corta o áudio em chunks usando os silêncios.
-    #Retorna lista de caminhos dos arquivos cortados.
+def cortar_audio_por_silencio(caminho_audio: str, pasta_saida="tmp/audio", min_silence_len=700, silence_thresh=-40, keep_silence=500):
+    # Corta o áudio em chunks usando os silêncios.
+    # Retorna lista de caminhos dos arquivos cortados.
+    from pydub import AudioSegment  # lazy: só carrega quando necessário
+    from pydub.silence import split_on_silence
 
     title = Path(caminho_audio).name
 
@@ -49,6 +49,7 @@ def cortar_audio_hibrido(
     keep_silence=500,              # ms
     formato_saida="mp3"
 ):
+    from pydub import AudioSegment, silence  # lazy: só carrega quando necessário
     os.makedirs(output_dir, exist_ok=True)
 
     print(f"\n🎧 Carregando áudio: {arquivo_entrada}")

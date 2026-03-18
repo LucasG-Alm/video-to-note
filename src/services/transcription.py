@@ -2,8 +2,6 @@ import os
 import json
 from pathlib import Path
 from groq import Groq
-from pydub import AudioSegment
-from src.core.audio import cortar_audio_por_silencio, cortar_audio_hibrido
 from src.utils.utils import print_hex_color
 
 def transcrever_audio(caminho_arquivo: str, idioma="pt", contexto="", model: str="whisper-large-v3-turbo"):
@@ -31,6 +29,7 @@ def transcrever_audio_inteligente(caminho_audio: str, idioma="pt", contexto="", 
     - Se > limite_mb corta por silêncio, transcreve cada chunk e junta o texto
     """
     tamanho_mb = os.path.getsize(caminho_audio) / (1024 * 1024)
+    from src.core.audio import cortar_audio_hibrido  # lazy: pydub só carrega quando necessário
     print(f"Tamanho do áudio: {tamanho_mb:.2f} MB")
 
     if tamanho_mb <= limite_mb:

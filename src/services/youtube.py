@@ -11,8 +11,8 @@ from src.services.transcription import transcrever_audio, transcrever_audio_inte
 from src.utils.utils import print_hex_color
 
 def extract_video_id(url):
-    """Extrai o ID do vídeo do link do YouTube."""
-    match = re.search(r"(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})", url)
+    """Extrai o ID do vídeo do link do YouTube (watch, youtu.be e Shorts)."""
+    match = re.search(r"(?:v=|youtu\.be/|shorts/)([a-zA-Z0-9_-]{11})", url)
     return match.group(1) if match else None
 
 def get_transcript(video_id):
