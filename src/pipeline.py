@@ -11,6 +11,7 @@ from src.services.youtube import (
 from src.services.transcription import transcrever_audio_inteligente, salvar_transcricao
 from src.core.notes2 import gerar_nota_md
 from src.utils.utils import print_hex_color
+from src.config import DEFAULT_MODEL, DEFAULT_DEPTH, DEFAULT_LANG
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
@@ -32,9 +33,10 @@ def resolve_template(depth: str) -> str:
 
 def youtube_to_notes(
     url: str,
-    depth: str = "intermediario",
+    depth: str = DEFAULT_DEPTH,
     output_dir: str = None,
-    model: str = "llama-3.3-70b-versatile",
+    model: str = DEFAULT_MODEL,
+    lang: str = DEFAULT_LANG,
     pasta_destino: str = "",
     delay: bool = False,
 ):
@@ -53,7 +55,7 @@ def youtube_to_notes(
     print_hex_color('#32cbff', "🎬 Processando:", title)
 
     # Tenta legenda primeiro, cai no Whisper se não tiver
-    transcript = get_transcript_with_yt_dlp(url)
+    transcript = get_transcript_with_yt_dlp(url, lang=lang)
     if transcript:
         final_transcript = {
             'text': transcript_to_text(transcript),
@@ -67,7 +69,7 @@ def youtube_to_notes(
         if not audio_path:
             print_hex_color('#f92f60', "❌ Não foi possível baixar o áudio.", "")
             return None
-        final_transcript = transcrever_audio_inteligente(audio_path)
+        final_transcript = transcrever_audio_inteligente(audio_path, idioma=lang)
         metadata['transcription_by'] = 'Groq Whisper API'
 
     json_path = PROJECT_ROOT / "data/03. transcriptions/Youtube" / pasta_destino / f"{title}.json"
@@ -95,9 +97,10 @@ def youtube_to_notes(
 
 def local_to_notes(
     path: str,
-    depth: str = "intermediario",
+    depth: str = DEFAULT_DEPTH,
     output_dir: str = None,
-    model: str = "llama-3.3-70b-versatile",
+    model: str = DEFAULT_MODEL,
+    lang: str = DEFAULT_LANG,
 ):
     """Pipeline: arquivo local de áudio/vídeo → transcrição → nota Markdown."""
     audio_path = Path(path)
@@ -108,7 +111,7 @@ def local_to_notes(
     title = audio_path.stem
     print_hex_color('#32cbff', "🎵 Processando arquivo local:", title)
 
-    transcription = transcrever_audio_inteligente(str(audio_path))
+    transcription = transcrever_audio_inteligente(str(audio_path), idioma=lang)
 
     metadata = {
         'title': title,

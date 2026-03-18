@@ -52,7 +52,7 @@ class TestYoutubeCommand:
         assert result.exit_code != 0
 
     def test_chama_pipeline_com_defaults(self):
-        # Sem --depth e --output: deve usar 'intermediario' e output_dir=None
+        # Sem --depth, --lang e --output: deve usar valores do config
         with patch("src.pipeline.youtube_to_notes", return_value=Path("nota.md")) as mock:
             result = runner.invoke(app, ["youtube", "https://youtu.be/XswU6CRs79s"])
 
@@ -61,6 +61,7 @@ class TestYoutubeCommand:
             depth="intermediario",
             output_dir=None,
             model="llama-3.3-70b-versatile",
+            lang="pt",
         )
         assert result.exit_code == 0
 
@@ -75,6 +76,12 @@ class TestYoutubeCommand:
             runner.invoke(app, ["youtube", "url", "--output", "C:/vault/_revisar/"])
 
         assert mock.call_args.kwargs["output_dir"] == "C:/vault/_revisar/"
+
+    def test_lang_en_e_repassado_ao_pipeline(self):
+        with patch("src.pipeline.youtube_to_notes", return_value=Path("nota.md")) as mock:
+            runner.invoke(app, ["youtube", "url", "--lang", "en"])
+
+        assert mock.call_args.kwargs["lang"] == "en"
 
     def test_exit_0_quando_nota_gerada(self):
         with patch("src.pipeline.youtube_to_notes", return_value=Path("nota.md")):
@@ -112,6 +119,7 @@ class TestLocalCommand:
             depth="intermediario",
             output_dir=None,
             model="llama-3.3-70b-versatile",
+            lang="pt",
         )
         assert result.exit_code == 0
 

@@ -8,6 +8,7 @@ from langchain_groq import ChatGroq
 from langchain.prompts import ChatPromptTemplate
 
 from src.utils.utils import print_hex_color
+from src.config import DEFAULT_MODEL
 
 def ler_md_template(caminho_md):
     with open(caminho_md, 'r', encoding='utf-8') as f:
@@ -56,7 +57,7 @@ def gerar_nota_md(
     path_template_md: str,
     metadata: dict = None,
     title: str = None,
-    model: str = 'llama-3.3-70b-versatile',
+    model: str = DEFAULT_MODEL,
     output_dir: str = None,
 ):
     # 🔍 Extrai metadados do arquivo

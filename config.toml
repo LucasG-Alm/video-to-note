@@ -1,0 +1,17 @@
+[llm]
+# Modelo usado para geração de notas (Groq LLaMA)
+# Opções: "llama-3.3-70b-versatile" | "llama-3.1-8b-instant" | "gemma2-9b-it"
+model = "llama-3.3-70b-versatile"
+
+[pipeline]
+# Profundidade padrão da nota: raso | intermediario | avancado | metacognitivo
+default_depth = "intermediario"
+
+# Idioma padrão para transcrição e legendas
+# Exemplos: "pt" | "en" | "es" | "fr"
+default_lang = "pt"
+
+[youtube]
+# Browser para leitura de cookies (necessário para vídeos age-restricted)
+# Opções: "edge" | "chrome" | "firefox" | "safari" | "" (desativado)
+cookies_from_browser = "edge"

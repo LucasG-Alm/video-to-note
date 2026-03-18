@@ -9,6 +9,7 @@ import unicodedata
 
 from src.services.transcription import transcrever_audio, transcrever_audio_inteligente, salvar_transcricao
 from src.utils.utils import print_hex_color
+from src.config import COOKIES_FROM_BROWSER
 
 def extract_video_id(url):
     """Extrai o ID do vídeo do link do YouTube (watch, youtu.be e Shorts)."""
@@ -37,10 +38,10 @@ def get_transcript_with_yt_dlp(video_url, lang="pt"):
         'writeautomaticsub': True,
         'subtitleslangs': [lang],
         'subtitlesformat': 'json3',
-        'cookiefile': '.cookies.txt',
         'outtmpl': '%(title)s.%(ext)s',
-        'cookies_from_browser': 'edge'
     }
+    if COOKIES_FROM_BROWSER:
+        ydl_opts['cookies_from_browser'] = COOKIES_FROM_BROWSER
 
     with YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(video_url, download=False)
@@ -84,7 +85,7 @@ def get_video_metadata(url):
 
     try:
         with YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(video_id, download=False)
+            info = ydl.extract_info(url, download=False)
     except Exception as e:
         print_hex_color('#f92f60', f"❌ Erro ao extrair metadados: {e}")
         return None
@@ -124,12 +125,8 @@ def get_video_metadata(url):
         'duration_sec': info.get('duration'),
         #'view_count': info.get('view_count'), # Não usar
         #'like_count': info.get('like_count'), # Não usar
-        'categories': info.get('categories'), # talvez usar...
-        'tags': info.get('tags'), # Não usar
-        'thumbnail': info.get('thumbnail'), # anexar a nota
-        #'thumbnails': info.get('thumbnails'), # não usar
-        'subtitles': info.get('subtitles'), # Não é a transcrição?
-        'automatic_captions': info.get('automatic_captions'),# Não é a transcrição?
+        'categories': info.get('categories'),
+        'thumbnail': info.get('thumbnail'),
         #'fps': info.get('fps'), # Não usar
         #'width': info.get('width'), # Não usar
         #'height': info.get('height'), # Não usar
@@ -157,8 +154,8 @@ def download_audio_from_youtube(url, output_dir="data/02. audio/Youtube", extens
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     try:
-        with YoutubeDL({'quiet': True}) as ydl:
-            info = ydl.extract_info(url, download=True)
+        with YoutubeDL({'quiet': True, 'skip_download': True}) as ydl:
+            info = ydl.extract_info(url, download=False)
             raw_title = info['title']
             safe_title = sanitize_filename(raw_title)
     except Exception as e:
