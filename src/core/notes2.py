@@ -56,7 +56,8 @@ def gerar_nota_md(
     path_template_md: str,
     metadata: dict = None,
     title: str = None,
-    model: str = 'llama-3.3-70b-versatile'
+    model: str = 'llama-3.3-70b-versatile',
+    output_dir: str = None,
 ):
     # 🔍 Extrai metadados do arquivo
     if title is None:
@@ -109,7 +110,10 @@ Transcrição:
     nota_final = f"""---\n{yaml_preenchido}\n---\n{getattr(resultado, 'content', str(resultado))}"""
 
     # 💾 Salvar
-    pasta_saida = Path(str(Path(path_transcricao_json).parent).replace("03. transcriptions", "04. notes"))
+    if output_dir:
+        pasta_saida = Path(output_dir)
+    else:
+        pasta_saida = Path(str(Path(path_transcricao_json).parent).replace("03. transcriptions", "04. notes"))
     pasta_saida.mkdir(parents=True, exist_ok=True)
 
     path_saida = pasta_saida / f"{title}.md"
