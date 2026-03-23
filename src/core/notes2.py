@@ -6,9 +6,59 @@ from datetime import datetime
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain.prompts import ChatPromptTemplate
+from langchain_core.messages import HumanMessage
 
 from src.utils.utils import print_hex_color
 from src.config import DEFAULT_MODEL
+
+FALLBACK_MODEL = "llama-3.1-8b-instant"
+_TOKEN_WARNING_THRESHOLD = 10000
+
+
+def _is_rate_limit_error(e: Exception) -> bool:
+    """Detecta erros de rate limit do Groq (status 429) em qualquer forma que cheguem."""
+    return (
+        type(e).__name__ == "RateLimitError"
+        or getattr(e, "status_code", None) == 429
+        or "429" in str(e)
+        or "rate limit" in str(e).lower()
+        or "rate_limit" in str(e).lower()
+    )
+
+
+def _invoke_llm_with_fallback(
+    prompt_text: str,
+    primary_model: str,
+    fallback_model: str,
+    api_key: str,
+) -> str:
+    """
+    Tenta chamar o LLM com o modelo primário.
+    Se receber rate limit (429), reexecuta com o modelo de fallback.
+    Usa HumanMessage diretamente — sem ChatPromptTemplate — para evitar
+    conflitos com chaves '{...}' em transcrições de código.
+    Qualquer outro erro é propagado normalmente.
+    """
+    def _run(model: str) -> str:
+        chat = ChatGroq(model=model, api_key=api_key)
+        result = chat.invoke([HumanMessage(content=prompt_text)])
+        return getattr(result, "content", str(result))
+
+    try:
+        return _run(primary_model)
+    except Exception as e:
+        if _is_rate_limit_error(e):
+            print_hex_color("#f0a500", f"⚠️  TPM excedido no {primary_model} — tentando {fallback_model}...", "")
+            return _run(fallback_model)
+        raise
+
+
+def _warn_if_tokens_high(text: str) -> None:
+    """Imprime aviso se o texto estiver próximo do limite de 12k tokens do free tier."""
+    estimated = _estimate_tokens(text)
+    if estimated > _TOKEN_WARNING_THRESHOLD:
+        print_hex_color("#f0a500", f"⚠️  Prompt longo ({estimated} tokens estimados) — próximo do limite de 12k TPM.", "")
+
 
 def ler_md_template(caminho_md):
     with open(caminho_md, 'r', encoding='utf-8') as f:
@@ -137,19 +187,26 @@ def gerar_nota_md(
     yaml_preenchido = preencher_variables(yaml_raw, metadata_final)
     prompt_final = preencher_variables(prompt_raw, metadata_final)
 
-    template = f"""
+    prompt_text = f"""
 {prompt_final}
 
 -----------
 Transcrição:
 {transcricao}
 """
-    prompt = ChatPromptTemplate.from_template(template)
 
-    chain = prompt | chat
-    resultado = chain.invoke({"transcricao": transcricao})
+    # ⚠️ M-09: aviso se prompt está próximo do limite de tokens
+    _warn_if_tokens_high(prompt_text)
 
-    nota_final = f"""---\n{yaml_preenchido}\n---\n{getattr(resultado, 'content', str(resultado))}"""
+    # 🤖 M-10: fallback automático de modelo se TPM excedido
+    conteudo = _invoke_llm_with_fallback(
+        prompt_text=prompt_text,
+        primary_model=model,
+        fallback_model=FALLBACK_MODEL,
+        api_key=api_key,
+    )
+
+    nota_final = f"""---\n{yaml_preenchido}\n---\n{conteudo}"""
 
     # 💾 Salvar
     if output_dir:
@@ -164,6 +221,35 @@ Transcrição:
 
     print_hex_color('#0bd271', f"✅ Nota salva em:",f"{path_saida}")
     return path_saida
+
+def split_transcript_by_chapters(segments: list, chapters: list) -> list:
+    """
+    Divide segmentos de transcrição pelos capítulos do vídeo.
+
+    Cada segmento é atribuído ao capítulo cujo intervalo
+    [start_time, próximo_capítulo.start_time) o contém.
+    O último capítulo abrange todos os segmentos restantes.
+
+    Retorna lista de dicts: [{'title': str, 'text': str}, ...]
+    Se não há capítulos, retorna lista com um único grupo com toda a transcrição.
+    """
+    if not chapters:
+        return [{'title': '', 'text': ' '.join(s['text'] for s in segments)}]
+
+    groups = [{'title': cap['title'], 'text': ''} for cap in chapters]
+
+    for seg in segments:
+        start = seg.get('start', 0)
+        idx = len(chapters) - 1
+        for i in range(len(chapters) - 1):
+            if start < chapters[i + 1]['start_time']:
+                idx = i
+                break
+        sep = ' ' if groups[idx]['text'] else ''
+        groups[idx]['text'] += sep + seg['text']
+
+    return groups
+
 
 if __name__ == "__main__":
     PROJECT_ROOT = Path(__file__).parent.parent.parent

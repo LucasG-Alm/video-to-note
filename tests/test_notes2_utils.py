@@ -13,6 +13,10 @@ from src.core.notes2 import (
     preencher_variables,
     ler_md_template,
     _estimate_tokens,
+    _is_rate_limit_error,
+    _invoke_llm_with_fallback,
+    _warn_if_tokens_high,
+    split_transcript_by_chapters,
     _split_into_chunks,
 )
 
@@ -268,3 +272,280 @@ class TestLoadDotenvPath:
         call_arg = mock_load.call_args[0][0]
         assert isinstance(call_arg, Path)
         assert call_arg.name == ".env"
+
+
+class TestIsRateLimitError:
+    """
+    M-10 — _is_rate_limit_error detecta erros de rate limit do Groq.
+
+    O Groq pode sinalizar TPM excedido de formas diferentes dependendo
+    da versão do SDK e de como o LangChain encapsula o erro:
+    - Exceção com atributo status_code=429
+    - Exceção cujo nome é 'RateLimitError'
+    - Exceção cuja mensagem contém '429' ou 'rate limit'
+    Qualquer um desses deve ser reconhecido como rate limit.
+    """
+
+    def test_reconhece_status_code_429(self):
+        e = Exception("error")
+        e.status_code = 429
+        assert _is_rate_limit_error(e) is True
+
+    def test_reconhece_nome_RateLimitError(self):
+        class RateLimitError(Exception):
+            pass
+        assert _is_rate_limit_error(RateLimitError("too many")) is True
+
+    def test_reconhece_mensagem_com_429(self):
+        assert _is_rate_limit_error(Exception("HTTP 429 Too Many Requests")) is True
+
+    def test_reconhece_mensagem_rate_limit(self):
+        assert _is_rate_limit_error(Exception("rate limit exceeded")) is True
+
+    def test_nao_reconhece_erro_generico(self):
+        assert _is_rate_limit_error(ValueError("algo deu errado")) is False
+
+    def test_nao_reconhece_erro_500(self):
+        e = Exception("server error")
+        e.status_code = 500
+        assert _is_rate_limit_error(e) is False
+
+
+class TestInvokeLlmWithFallback:
+    """
+    M-10 — _invoke_llm_with_fallback tenta o modelo primário e,
+    se receber rate limit, reexecuta com o modelo de fallback.
+
+    A função recebe o prompt já renderizado (sem variáveis de template)
+    e chama ChatGroq.invoke([HumanMessage(...)]) diretamente — sem
+    ChatPromptTemplate, o que evita conflitos com chaves '{...}' que
+    podem aparecer em transcrições de código.
+
+    Testamos mockando ChatGroq.invoke para controlar falhas e respostas.
+    """
+
+    def _make_rate_limit_error(self):
+        e = Exception("rate_limit_exceeded")
+        e.status_code = 429
+        return e
+
+    def test_retorna_resultado_do_modelo_primario_quando_funciona(self):
+        mock_result = MagicMock()
+        mock_result.content = "nota gerada"
+
+        with patch("src.core.notes2.ChatGroq") as MockGroq:
+            instance = MagicMock()
+            instance.invoke.return_value = mock_result
+            MockGroq.return_value = instance
+
+            result = _invoke_llm_with_fallback(
+                prompt_text="Resuma este texto sem variáveis de template",
+                primary_model="llama-3.3-70b-versatile",
+                fallback_model="llama-3.1-8b-instant",
+                api_key="fake-key",
+            )
+
+        assert result == "nota gerada"
+
+    def test_usa_fallback_quando_primario_lanca_rate_limit(self):
+        fallback_result = MagicMock()
+        fallback_result.content = "nota do fallback"
+
+        with patch("src.core.notes2.ChatGroq") as MockGroq:
+            rate_limit = self._make_rate_limit_error()
+
+            primary_instance = MagicMock()
+            primary_instance.invoke.side_effect = rate_limit
+
+            fallback_instance = MagicMock()
+            fallback_instance.invoke.return_value = fallback_result
+
+            MockGroq.side_effect = [primary_instance, fallback_instance]
+
+            result = _invoke_llm_with_fallback(
+                prompt_text="Resuma este texto",
+                primary_model="llama-3.3-70b-versatile",
+                fallback_model="llama-3.1-8b-instant",
+                api_key="fake-key",
+            )
+
+        assert result == "nota do fallback"
+
+    def test_instancia_fallback_com_modelo_correto(self):
+        fallback_result = MagicMock()
+        fallback_result.content = "ok"
+
+        with patch("src.core.notes2.ChatGroq") as MockGroq:
+            rate_limit = self._make_rate_limit_error()
+
+            primary_instance = MagicMock()
+            primary_instance.invoke.side_effect = rate_limit
+
+            fallback_instance = MagicMock()
+            fallback_instance.invoke.return_value = fallback_result
+
+            MockGroq.side_effect = [primary_instance, fallback_instance]
+
+            _invoke_llm_with_fallback(
+                prompt_text="prompt",
+                primary_model="llama-3.3-70b-versatile",
+                fallback_model="llama-3.1-8b-instant",
+                api_key="fake-key",
+            )
+
+        # Segundo ChatGroq instanciado deve usar o modelo de fallback
+        assert MockGroq.call_args_list[1].kwargs.get("model") == "llama-3.1-8b-instant" or \
+               MockGroq.call_args_list[1].args[0] == "llama-3.1-8b-instant"
+
+    def test_nao_faz_fallback_em_erro_generico(self):
+        with patch("src.core.notes2.ChatGroq") as MockGroq:
+            instance = MagicMock()
+            instance.invoke.side_effect = ValueError("erro de parsing")
+            MockGroq.return_value = instance
+
+            with pytest.raises(ValueError, match="erro de parsing"):
+                _invoke_llm_with_fallback(
+                    prompt_text="prompt",
+                    primary_model="llama-3.3-70b-versatile",
+                    fallback_model="llama-3.1-8b-instant",
+                    api_key="fake-key",
+                )
+
+    def test_propaga_erro_se_fallback_tambem_falha(self):
+        with patch("src.core.notes2.ChatGroq") as MockGroq:
+            rate_limit = self._make_rate_limit_error()
+
+            primary_instance = MagicMock()
+            primary_instance.invoke.side_effect = rate_limit
+
+            fallback_instance = MagicMock()
+            fallback_instance.invoke.side_effect = Exception("fallback também falhou")
+
+            MockGroq.side_effect = [primary_instance, fallback_instance]
+
+            with pytest.raises(Exception, match="fallback também falhou"):
+                _invoke_llm_with_fallback(
+                    prompt_text="prompt",
+                    primary_model="llama-3.3-70b-versatile",
+                    fallback_model="llama-3.1-8b-instant",
+                    api_key="fake-key",
+                )
+
+
+class TestWarnIfTokensHigh:
+    """
+    M-09 — _warn_if_tokens_high imprime aviso quando o texto está
+    próximo do limite de 12k tokens do free tier da Groq.
+
+    Threshold: 10000 tokens estimados (~40000 chars).
+    Abaixo: sem output. Acima: print com a contagem.
+    A geração continua em ambos os casos — é só informativo.
+    """
+
+    def test_sem_output_abaixo_do_threshold(self, capsys):
+        texto_curto = "palavra " * 100  # ~800 chars → ~200 tokens
+        _warn_if_tokens_high(texto_curto)
+        assert capsys.readouterr().out == ""
+
+    def test_imprime_aviso_acima_do_threshold(self, capsys):
+        texto_longo = "palavra " * 6000  # ~48000 chars → ~12000 tokens
+        _warn_if_tokens_high(texto_longo)
+        output = capsys.readouterr().out
+        assert output != ""
+
+    def test_aviso_contem_contagem_de_tokens(self, capsys):
+        texto_longo = "a" * 44000  # 44000 chars → 11000 tokens
+        _warn_if_tokens_high(texto_longo)
+        output = capsys.readouterr().out
+        assert "11000" in output
+
+    def test_nao_lanca_excecao(self):
+        # Garantir que o aviso nunca interrompe o pipeline
+        texto_longo = "x" * 100000
+        _warn_if_tokens_high(texto_longo)  # não deve lançar nada
+
+
+class TestSplitTranscriptByChapters:
+    """
+    M-05 — split_transcript_by_chapters divide segmentos de transcrição
+    pelos capítulos do vídeo usando os timestamps de cada segmento.
+
+    Regra de atribuição: segmento vai para o capítulo cujo
+    intervalo [start_time, próximo_capítulo.start_time) o contém.
+    O último capítulo vai até o fim da transcrição.
+
+    Por que isso importa?
+    → Sem essa função, --by-chapter não consegue separar o conteúdo
+      de cada parte do vídeo. Um erro aqui mistura trechos de capítulos
+      diferentes, gerando notas incoerentes.
+    """
+
+    CHAPTERS = [
+        {'start_time': 0,  'title': 'Introdução'},
+        {'start_time': 30, 'title': 'Desenvolvimento'},
+        {'start_time': 60, 'title': 'Conclusão'},
+    ]
+
+    SEGMENTS = [
+        {'start': 0.0,  'duration': 5.0, 'text': 'texto intro 1'},
+        {'start': 10.0, 'duration': 5.0, 'text': 'texto intro 2'},
+        {'start': 30.0, 'duration': 5.0, 'text': 'texto dev 1'},
+        {'start': 45.0, 'duration': 5.0, 'text': 'texto dev 2'},
+        {'start': 60.0, 'duration': 5.0, 'text': 'texto conclusao'},
+    ]
+
+    def test_retorna_um_grupo_por_capitulo(self):
+        result = split_transcript_by_chapters(self.SEGMENTS, self.CHAPTERS)
+        assert len(result) == 3
+
+    def test_titulos_preservados(self):
+        result = split_transcript_by_chapters(self.SEGMENTS, self.CHAPTERS)
+        titles = [g['title'] for g in result]
+        assert titles == ['Introdução', 'Desenvolvimento', 'Conclusão']
+
+    def test_segmentos_atribuidos_ao_capitulo_correto(self):
+        result = split_transcript_by_chapters(self.SEGMENTS, self.CHAPTERS)
+        assert 'texto intro 1' in result[0]['text']
+        assert 'texto intro 2' in result[0]['text']
+        assert 'texto dev 1' in result[1]['text']
+        assert 'texto dev 2' in result[1]['text']
+        assert 'texto conclusao' in result[2]['text']
+
+    def test_segmento_no_inicio_exato_do_capitulo(self):
+        # Segmento em start=30.0 deve ir para 'Desenvolvimento', não 'Introdução'
+        result = split_transcript_by_chapters(self.SEGMENTS, self.CHAPTERS)
+        assert 'texto dev 1' not in result[0]['text']
+        assert 'texto dev 1' in result[1]['text']
+
+    def test_sem_capitulos_retorna_tudo_em_um_grupo(self):
+        result = split_transcript_by_chapters(self.SEGMENTS, [])
+        assert len(result) == 1
+        assert 'texto intro 1' in result[0]['text']
+        assert 'texto conclusao' in result[0]['text']
+
+    def test_sem_capitulos_titulo_e_vazio_ou_padrao(self):
+        result = split_transcript_by_chapters(self.SEGMENTS, [])
+        # Não deve lançar exceção e deve ter algum título (pode ser "" ou padrão)
+        assert 'title' in result[0]
+
+    def test_capitulo_sem_segmentos_retorna_texto_vazio(self):
+        chapters = [
+            {'start_time': 0,   'title': 'Com conteúdo'},
+            {'start_time': 100, 'title': 'Vazio'},  # nenhum segmento aqui
+        ]
+        segments = [{'start': 5.0, 'duration': 2.0, 'text': 'só aqui'}]
+        result = split_transcript_by_chapters(segments, chapters)
+        assert result[1]['text'].strip() == ''
+
+    def test_capitulo_unico_recebe_todos_os_segmentos(self):
+        chapters = [{'start_time': 0, 'title': 'Único'}]
+        result = split_transcript_by_chapters(self.SEGMENTS, chapters)
+        assert len(result) == 1
+        for seg in self.SEGMENTS:
+            assert seg['text'] in result[0]['text']
+
+    def test_segmentos_vazios_retorna_grupos_com_texto_vazio(self):
+        result = split_transcript_by_chapters([], self.CHAPTERS)
+        assert len(result) == 3
+        for group in result:
+            assert group['text'].strip() == ''
