@@ -1,4 +1,5 @@
 import re
+import requests
 from pathlib import Path
 from yt_dlp import YoutubeDL
 from datetime import datetime
@@ -13,12 +14,63 @@ def extract_video_id(url):
     match = re.search(r"(?:v=|youtu\.be/|shorts/)([a-zA-Z0-9_-]{11})", url)
     return match.group(1) if match else None
 
+def _vtt_time_to_seconds(time_str: str) -> float:
+    """Converte timestamp VTT ('HH:MM:SS.mmm' ou 'MM:SS.mmm') para segundos."""
+    parts = time_str.split(':')
+    if len(parts) == 3:
+        h, m, s = parts
+        return int(h) * 3600 + int(m) * 60 + float(s)
+    m, s = parts
+    return int(m) * 60 + float(s)
+
+
+def _parse_vtt(vtt_content: str) -> list:
+    """
+    Parseia conteúdo VTT e retorna segmentos com timestamps reais.
+    Filtra entradas duplicadas que o YouTube gera para animação de karaokê.
+    """
+    cue_pattern = re.compile(
+        r'(\d{1,2}:\d{2}:\d{2}\.\d{3}|\d{2}:\d{2}\.\d{3})'
+        r'\s+-->\s+'
+        r'(\d{1,2}:\d{2}:\d{2}\.\d{3}|\d{2}:\d{2}\.\d{3})'
+        r'[^\n]*\n(.*?)(?=\n\n|\Z)',
+        re.DOTALL,
+    )
+    segments = []
+    seen_texts = set()
+    for match in cue_pattern.finditer(vtt_content):
+        start_str, end_str, raw_text = match.group(1), match.group(2), match.group(3)
+        text = re.sub(r'<[^>]+>', '', raw_text).strip()  # remove tags <c>, <00:00:01.000>
+        if not text or text in seen_texts:
+            continue
+        seen_texts.add(text)
+        start = _vtt_time_to_seconds(start_str)
+        end = _vtt_time_to_seconds(end_str)
+        segments.append({'start': start, 'duration': end - start, 'text': text})
+    return segments
+
+
+def _parse_json3(data: dict) -> list:
+    """Parseia formato json3 do YouTube. Timestamps podem ser 0 em legendas automáticas."""
+    transcript = []
+    for event in data.get('events', []):
+        text = ''.join(seg.get('utf8', '') for seg in event.get('segs', []))
+        if text.strip():
+            transcript.append({
+                'start': event.get('tStartMs', event.get('t', 0)) / 1000,
+                'duration': event.get('dDurationMs', event.get('d', 0)) / 1000,
+                'text': text.strip(),
+            })
+    return transcript
+
+
 def get_transcript_with_yt_dlp(video_url, lang="pt"):
     """
-    Tenta baixar legenda automática via yt-dlp + plugin SABR (yt-dlp-ytse).
-    Retorna lista de dicts tipo:
-    [{'start': 0.0, 'duration': 2.0, 'text': 'texto...'}, ...]
-    Ou [] se não conseguir.
+    Baixa legenda automática via yt-dlp.
+    Prefere formato VTT (timestamps confiáveis); fallback para json3.
+
+    Retorna lista de dicts: [{'start': float, 'duration': float, 'text': str}, ...]
+    Ou [] se não houver legenda disponível.
     """
     ydl_opts = {
         'skip_download': True,
@@ -26,7 +78,6 @@ def get_transcript_with_yt_dlp(video_url, lang="pt"):
         'writesubtitles': True,
         'writeautomaticsub': True,
         'subtitleslangs': [lang],
-        'subtitlesformat': 'json3',
         'outtmpl': '%(title)s.%(ext)s',
     }
     if COOKIES_FROM_BROWSER:
@@ -34,34 +85,30 @@ def get_transcript_with_yt_dlp(video_url, lang="pt"):
 
     with YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(video_url, download=False)
-        # Legendas automáticas vem em info['automatic_captions'][lang] ou info['subtitles'][lang]
         captions = info.get('automatic_captions', {}) or info.get('subtitles', {})
         lang_caps = captions.get(lang, [])
         if not lang_caps:
             return []
 
-        # Pega a url do subtitle json3
-        sub_url = lang_caps[0].get('url')
+        # Prefere VTT — timestamps explícitos e confiáveis
+        cap = next((c for c in lang_caps if c.get('ext') == 'vtt'), None)
+        fmt = 'vtt'
+        if cap is None:
+            cap = next((c for c in lang_caps if c.get('ext') == 'json3'), lang_caps[0])
+            fmt = cap.get('ext', 'json3')
+
+        sub_url = cap.get('url')
         if not sub_url:
             return []
 
-        import requests
         resp = requests.get(sub_url)
         if resp.status_code != 200:
             return []
 
-        data = resp.json()
-        # data['events'] é uma lista com 'segs' contendo textos
-        transcript = []
-        for event in data.get('events', []):
-            text = ''.join(seg.get('utf8', '') for seg in event.get('segs', []))
-            if text.strip():
-                transcript.append({
-                    'start': event.get('t', 0) / 1000,  # converte miliseg pra seg
-                    'duration': event.get('d', 0) / 1000,
-                    'text': text.strip()
-                })
-        return transcript
+        if fmt == 'vtt':
+            return _parse_vtt(resp.text)
+        else:
+            return _parse_json3(resp.json())
 
 def transcript_to_text(transcript):
     """Converte a transcrição em texto."""
