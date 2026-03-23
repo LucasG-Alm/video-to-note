@@ -549,3 +549,177 @@ class TestSplitTranscriptByChapters:
         assert len(result) == 3
         for group in result:
             assert group['text'].strip() == ''
+
+
+class TestSummarizeChunkFallback:
+    """
+    BUG-01 — _summarize_chunk deve usar _invoke_llm_with_fallback internamente.
+
+    Quando o modelo primário retorna 429 durante o chunking,
+    deve tentar o fallback (8b) em vez de propagar a exceção.
+    """
+
+    def test_fallback_quando_primario_retorna_429(self):
+        """429 durante chunk → llama-3.1-8b-instant é chamado como fallback."""
+        from src.core.notes2 import _summarize_chunk, FALLBACK_MODEL
+
+        rate_limit_error = Exception("rate limit exceeded 429")
+
+        with patch("src.core.notes2.ChatGroq") as MockGroq:
+            primary = MagicMock()
+            primary.invoke.side_effect = rate_limit_error
+            fallback = MagicMock()
+            fallback.invoke.return_value = MagicMock(content="resumo via fallback")
+            MockGroq.side_effect = [primary, fallback]
+
+            result = _summarize_chunk(
+                chunk="texto do chunk",
+                primary_model="llama-3.3-70b-versatile",
+                fallback_model=FALLBACK_MODEL,
+                api_key="fake-key",
+                idx=1,
+                total=3,
+            )
+
+        assert result == "resumo via fallback"
+        assert MockGroq.call_count == 2  # primário + fallback
+
+    def test_propaga_erro_generico_sem_fallback(self):
+        """Erros que não são rate limit devem subir normalmente."""
+        from src.core.notes2 import _summarize_chunk, FALLBACK_MODEL
+
+        with patch("src.core.notes2.ChatGroq") as MockGroq:
+            instance = MagicMock()
+            instance.invoke.side_effect = ValueError("erro de parsing")
+            MockGroq.return_value = instance
+
+            with pytest.raises(ValueError, match="erro de parsing"):
+                _summarize_chunk(
+                    chunk="texto",
+                    primary_model="llama-3.3-70b-versatile",
+                    fallback_model=FALLBACK_MODEL,
+                    api_key="fake-key",
+                    idx=1,
+                    total=1,
+                )
+
+    def test_sucesso_sem_fallback_quando_primario_funciona(self):
+        """Quando o primário funciona, fallback não é chamado."""
+        from src.core.notes2 import _summarize_chunk, FALLBACK_MODEL
+
+        with patch("src.core.notes2.ChatGroq") as MockGroq:
+            instance = MagicMock()
+            instance.invoke.return_value = MagicMock(content="resumo direto")
+            MockGroq.return_value = instance
+
+            result = _summarize_chunk(
+                chunk="texto",
+                primary_model="llama-3.3-70b-versatile",
+                fallback_model=FALLBACK_MODEL,
+                api_key="fake-key",
+                idx=2,
+                total=5,
+            )
+
+        assert result == "resumo direto"
+        assert MockGroq.call_count == 1
+
+
+class TestGerarNotaMdDateOverride:
+    """
+    BUG-03 — gerar_nota_md deve aceitar date_override para definir
+    data_nota com data customizada em vez de datetime.now().
+
+    Caso de uso: gerar nota de transcrição antiga (ex: 2025-07-12)
+    sem que o campo data_nota fique com a data de hoje.
+    """
+
+    def test_date_override_aparece_na_nota_gerada(self, tmp_path):
+        """Quando date_override é passado, data_nota usa esse valor."""
+        import json
+        from unittest.mock import patch, MagicMock
+        from src.core.notes2 import gerar_nota_md
+
+        # transcrição mínima
+        transcricao = {
+            "metadata": {
+                "title": "Video Teste",
+                "uploader": "Canal",
+                "webpage_url": "https://youtube.com/watch?v=abc",
+                "duration_sec": 600,
+                "chapters": [],
+                "date_generated": "2025-07-12T00:00:00",
+            },
+            "transcription": {"text": "conteudo do video"}
+        }
+        json_path = tmp_path / "video.json"
+        json_path.write_text(json.dumps(transcricao), encoding="utf-8")
+
+        template_content = "---\ndata_nota: {{date}}\nstatus: inbox\n---\n{{transcricao}}"
+        template_path = tmp_path / "template.md"
+        template_path.write_text(template_content, encoding="utf-8")
+
+        mock_result = MagicMock()
+        mock_result.content = "nota gerada"
+
+        with patch("src.core.notes2.ChatGroq") as MockGroq, \
+             patch("src.core.notes2.load_dotenv"), \
+             patch.dict("os.environ", {"GROQ_API_KEY": "fake-key"}):
+            instance = MagicMock()
+            instance.invoke.return_value = mock_result
+            MockGroq.return_value = instance
+
+            out = gerar_nota_md(
+                path_transcricao_json=str(json_path),
+                path_template_md=str(template_path),
+                output_dir=str(tmp_path),
+                date_override="2025-07-12",
+            )
+
+        content = out.read_text(encoding="utf-8")
+        assert "2025-07-12" in content
+        assert "2026-" not in content  # não deve usar data de hoje
+
+    def test_sem_date_override_usa_data_atual(self, tmp_path):
+        """Sem date_override, comportamento original: usa datetime.now()."""
+        import json
+        from datetime import datetime
+        from unittest.mock import patch, MagicMock
+        from src.core.notes2 import gerar_nota_md
+
+        transcricao = {
+            "metadata": {
+                "title": "Video Hoje",
+                "uploader": "Canal",
+                "webpage_url": "https://youtube.com/watch?v=xyz",
+                "duration_sec": 300,
+                "chapters": [],
+            },
+            "transcription": {"text": "texto qualquer"}
+        }
+        json_path = tmp_path / "video2.json"
+        json_path.write_text(json.dumps(transcricao), encoding="utf-8")
+
+        template_content = "---\ndata_nota: {{date}}\n---\n{{transcricao}}"
+        template_path = tmp_path / "template2.md"
+        template_path.write_text(template_content, encoding="utf-8")
+
+        mock_result = MagicMock()
+        mock_result.content = "nota"
+
+        with patch("src.core.notes2.ChatGroq") as MockGroq, \
+             patch("src.core.notes2.load_dotenv"), \
+             patch.dict("os.environ", {"GROQ_API_KEY": "fake-key"}):
+            instance = MagicMock()
+            instance.invoke.return_value = mock_result
+            MockGroq.return_value = instance
+
+            out = gerar_nota_md(
+                path_transcricao_json=str(json_path),
+                path_template_md=str(template_path),
+                output_dir=str(tmp_path),
+            )
+
+        ano_atual = str(datetime.now().year)
+        content = out.read_text(encoding="utf-8")
+        assert ano_atual in content

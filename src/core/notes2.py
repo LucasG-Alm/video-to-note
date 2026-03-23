@@ -110,14 +110,13 @@ def _split_into_chunks(text: str, max_tokens: int) -> list:
     return chunks
 
 
-def _summarize_chunk(chunk: str, chat, idx: int, total: int) -> str:
-    prompt = ChatPromptTemplate.from_template(
-        "Você é um assistente de síntese. Resuma os pontos principais desta parte "
-        "({idx} de {total}) da transcrição em tópicos concisos, preservando ideias "
-        "centrais, exemplos e argumentos importantes:\n\n{chunk}"
+def _summarize_chunk(chunk: str, primary_model: str, fallback_model: str, api_key: str, idx: int, total: int) -> str:
+    prompt_text = (
+        f"Você é um assistente de síntese. Resuma os pontos principais desta parte "
+        f"({idx} de {total}) da transcrição em tópicos concisos, preservando ideias "
+        f"centrais, exemplos e argumentos importantes:\n\n{chunk}"
     )
-    result = (prompt | chat).invoke({"chunk": chunk, "idx": idx, "total": total})
-    return getattr(result, 'content', str(result))
+    return _invoke_llm_with_fallback(prompt_text, primary_model, fallback_model, api_key)
 
 
 def gerar_capitulos_formatado(capitulos: list) -> str:
@@ -144,6 +143,7 @@ def gerar_nota_md(
     title: str = None,
     model: str = DEFAULT_MODEL,
     output_dir: str = None,
+    date_override: str = None,
 ):
     # 🔍 Extrai metadados do arquivo
     if title is None:
@@ -157,7 +157,7 @@ def gerar_nota_md(
     metadata_json = dados.get("metadata", {})
     capitulos = gerar_capitulos_formatado(dados.get("metadata", {}).get("chapters", ""))
     duracao = metadata_json.get("duration_sec", 0)
-    data_atual = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    data_atual = date_override if date_override else datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     horas = int(duracao // 3600)
     minutos = int((duracao % 3600) // 60)
     segundos = int(duracao % 60)
@@ -176,7 +176,7 @@ def gerar_nota_md(
     if _estimate_tokens(transcricao) > _MAX_TRANSCRIPTION_TOKENS:
         chunks = _split_into_chunks(transcricao, _CHUNK_TOKENS)
         print_hex_color('#f0a500', f"⚠️  Transcrição longa ({_estimate_tokens(transcricao)} tokens estimados) — dividindo em {len(chunks)} partes...", "")
-        summaries = [_summarize_chunk(chunk, chat, i + 1, len(chunks)) for i, chunk in enumerate(chunks)]
+        summaries = [_summarize_chunk(chunk, model, FALLBACK_MODEL, api_key, i + 1, len(chunks)) for i, chunk in enumerate(chunks)]
         transcricao = "\n\n---\n\n".join(summaries)
         print_hex_color('#0bd271', f"✅ {len(chunks)} partes resumidas. Gerando nota final...", "")
 

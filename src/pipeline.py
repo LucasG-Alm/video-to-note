@@ -109,26 +109,35 @@ def youtube_to_notes(
     title = sanitize_filename(metadata['title'])
     print_hex_color('#32cbff', "🎬 Processando:", title)
 
-    # Tenta legenda primeiro, cai no Whisper se não tiver
-    transcript = get_transcript_with_yt_dlp(url, lang=lang)
-    if transcript:
-        final_transcript = {
-            'text': transcript_to_text(transcript),
-            'segments': transcript,
-        }
-    else:
-        print_hex_color('#f92f60', "❌ Sem legenda disponível, tentando Whisper...")
-        print_hex_color("#ffaa00", "⚠️  Baixando áudio para transcrição com Whisper...")
-        audio_dir = str(PROJECT_ROOT / "data/02. audio/Youtube" / pasta_destino)
-        audio_path = download_audio_from_youtube(url, audio_dir)
-        if not audio_path:
-            print_hex_color('#f92f60', "❌ Não foi possível baixar o áudio.", "")
-            return None
-        final_transcript = transcrever_audio_inteligente(audio_path, idioma=lang)
-        metadata['transcription_by'] = 'Groq Whisper API'
-
     json_path = PROJECT_ROOT / "data/03. transcriptions/Youtube" / pasta_destino / f"{title}.json"
-    salvar_transcricao(metadata, final_transcript, str(json_path))
+
+    # Reutiliza transcrição existente se o JSON já estiver em disco
+    if json_path.exists():
+        import json as _json
+        print_hex_color('#32cbff', "♻️  Transcrição em cache, pulando download.", "")
+        with open(json_path, encoding='utf-8') as f:
+            cached = _json.load(f)
+        final_transcript = cached.get('transcription', {})
+        metadata = {**cached.get('metadata', metadata), **{k: v for k, v in metadata.items() if k not in cached.get('metadata', {})}}
+    else:
+        # Tenta legenda primeiro, cai no Whisper se não tiver
+        transcript = get_transcript_with_yt_dlp(url, lang=lang)
+        if transcript:
+            final_transcript = {
+                'text': transcript_to_text(transcript),
+                'segments': transcript,
+            }
+        else:
+            print_hex_color('#f92f60', "❌ Sem legenda disponível, tentando Whisper...")
+            print_hex_color("#ffaa00", "⚠️  Baixando áudio para transcrição com Whisper...")
+            audio_dir = str(PROJECT_ROOT / "data/02. audio/Youtube" / pasta_destino)
+            audio_path = download_audio_from_youtube(url, audio_dir)
+            if not audio_path:
+                print_hex_color('#f92f60', "❌ Não foi possível baixar o áudio.", "")
+                return None
+            final_transcript = transcrever_audio_inteligente(audio_path, idioma=lang)
+            metadata['transcription_by'] = 'Groq Whisper API'
+        salvar_transcricao(metadata, final_transcript, str(json_path))
 
     try:
         if by_chapter and metadata.get('chapters'):
