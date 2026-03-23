@@ -144,3 +144,17 @@ class TestAppGeral:
         result = runner.invoke(app, [])
         assert "youtube" in result.output.lower()
         assert "local" in result.output.lower()
+
+    def test_stdout_encoding_utf8(self):
+        """
+        ERR-01 — cli.py deve reconfigurar stdout para UTF-8 ao ser importado.
+
+        No Windows, o terminal padrão usa cp1252, que não suporta emojis.
+        sys.stdout.reconfigure(encoding='utf-8') garante que os emojis do
+        pipeline (✅ 🎬 ⚠️) não estourem UnicodeEncodeError.
+
+        Importar src.cli já executa o reconfigure (nível de módulo).
+        """
+        import sys
+        import src.cli  # noqa: F401 — side effect intencional
+        assert sys.stdout.encoding.lower() == "utf-8"

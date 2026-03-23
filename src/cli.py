@@ -1,3 +1,6 @@
+import sys
+sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+
 from enum import Enum
 from typing import Optional
 
