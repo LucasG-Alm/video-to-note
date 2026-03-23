@@ -155,6 +155,19 @@ Instalação:
 cp .claude/skills/media-to-notes.md ~/.claude/plugins/local/skills/
 ```
 
+### ✅ Sprint 6 — Refactor & Limpeza (concluído)
+
+| O que foi feito | Impacto |
+|-----------------|---------|
+| `config.toml` + `src/config.py` — fonte única de verdade | Modelo LLM, depth e lang configuráveis sem tocar código |
+| Opção `--lang` / `-l` no CLI | Usuário escolhe idioma da transcrição |
+| Bug do duplo-download corrigido em `youtube.py` | yt-dlp não baixa vídeo inteiro para ler o título |
+| `cookies_from_browser` condicional | Portável em qualquer OS — não força Edge |
+| Layer Streamlit removida completamente | 11 arquivos deletados, -600 linhas |
+| 9 dependências removidas do `pyproject.toml` | Instalação ~40% mais leve |
+
+**Total de testes: 48 | Falhas: 0**
+
 ---
 
 ## Como Rodar
@@ -189,8 +202,11 @@ GROQ_API_KEY=gsk_...
 |----------------|--------|
 | CLI com Typer | ✅ Concluído |
 | 4 templates de profundidade | ✅ Concluído |
-| Testes unitários (47 testes) | ✅ Concluído |
+| Testes unitários (48 testes) | ✅ Concluído |
 | Claude Code skill | ✅ Concluído |
 | Suporte a Shorts e URLs com timestamp | ✅ Concluído |
+| Config centralizado (`config.toml`) | ✅ Concluído |
+| Opção `--lang` no CLI | ✅ Concluído |
+| Remoção completa da layer Streamlit | ✅ Concluído |
 | Testes mockados para APIs externas (Groq, yt-dlp) | 🕐 Implementação futura |
 | Pesquisa ao estilo Perplexity — busca + síntese + citações | 🔭 Ideia futura |
