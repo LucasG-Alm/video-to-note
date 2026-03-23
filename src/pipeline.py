@@ -9,7 +9,7 @@ from src.services.youtube import (
     download_audio_from_youtube,
 )
 from src.services.transcription import transcrever_audio_inteligente, salvar_transcricao
-from src.core.notes2 import gerar_nota_md
+from src.core.notes2 import gerar_nota_md, split_transcript_by_chapters, _invoke_llm_with_fallback, FALLBACK_MODEL
 from src.utils.utils import print_hex_color
 from src.config import DEFAULT_MODEL, DEFAULT_DEPTH, DEFAULT_LANG
 
@@ -31,6 +31,60 @@ def resolve_template(depth: str) -> str:
     return str(path)
 
 
+def _gerar_nota_por_capitulos(
+    json_path: str,
+    segments: list,
+    chapters: list,
+    template_path: str,
+    title: str,
+    model: str,
+    output_dir: str = None,
+) -> Path:
+    """Gera nota com seções ## por capítulo, processando cada um via LLM."""
+    import os
+    from dotenv import load_dotenv
+    from langchain.prompts import ChatPromptTemplate
+
+    load_dotenv(PROJECT_ROOT / '.env')
+    api_key = os.getenv('GROQ_API_KEY')
+    if not api_key:
+        raise ValueError("GROQ_API_KEY não encontrada.")
+
+    grupos = split_transcript_by_chapters(segments, chapters)
+    print_hex_color('#32cbff', f"📚 Processando {len(grupos)} capítulos...", "")
+
+    secoes = []
+    for i, grupo in enumerate(grupos, 1):
+        chapter_title = grupo['title'] or f"Parte {i}"
+        print_hex_color('#32cbff', f"  [{i}/{len(grupos)}] {chapter_title}", "")
+        if not grupo['text'].strip():
+            secoes.append(f"## {chapter_title}\n\n*(sem transcrição disponível)*")
+            continue
+        prompt = f"Resuma os pontos principais deste trecho do vídeo em tópicos concisos:\n\n{grupo['text']}"
+        conteudo = _invoke_llm_with_fallback(
+            prompt_text=prompt,
+            primary_model=model,
+            fallback_model=FALLBACK_MODEL,
+            api_key=api_key,
+        )
+        secoes.append(f"## {chapter_title}\n\n{conteudo}")
+
+    nota_final = f"# {title}\n\n" + "\n\n---\n\n".join(secoes)
+
+    if output_dir:
+        pasta_saida = Path(output_dir)
+    else:
+        pasta_saida = PROJECT_ROOT / "data/04. notes/Youtube"
+    pasta_saida.mkdir(parents=True, exist_ok=True)
+
+    path_saida = pasta_saida / f"{title}.md"
+    with open(path_saida, 'w', encoding='utf-8') as f:
+        f.write(nota_final)
+
+    print_hex_color('#0bd271', "✅ Nota por capítulos salva em:", str(path_saida))
+    return path_saida
+
+
 def youtube_to_notes(
     url: str,
     depth: str = DEFAULT_DEPTH,
@@ -39,6 +93,7 @@ def youtube_to_notes(
     lang: str = DEFAULT_LANG,
     pasta_destino: str = "",
     delay: bool = False,
+    by_chapter: bool = False,
 ):
     """Pipeline completo: YouTube URL → transcrição → nota Markdown."""
     video_id = extract_video_id(url)
@@ -76,13 +131,24 @@ def youtube_to_notes(
     salvar_transcricao(metadata, final_transcript, str(json_path))
 
     try:
-        output = gerar_nota_md(
-            path_transcricao_json=str(json_path),
-            path_template_md=resolve_template(depth),
-            metadata={"tags_md": "YouTube/Vídeo"},
-            model=model,
-            output_dir=output_dir,
-        )
+        if by_chapter and metadata.get('chapters'):
+            output = _gerar_nota_por_capitulos(
+                json_path=str(json_path),
+                segments=final_transcript.get('segments', []),
+                chapters=metadata['chapters'],
+                template_path=resolve_template(depth),
+                title=title,
+                model=model,
+                output_dir=output_dir,
+            )
+        else:
+            output = gerar_nota_md(
+                path_transcricao_json=str(json_path),
+                path_template_md=resolve_template(depth),
+                metadata={"tags_md": "YouTube/Vídeo"},
+                model=model,
+                output_dir=output_dir,
+            )
     except Exception as e:
         print_hex_color('#f92f60', f"❌ Erro ao gerar nota: {e}", "")
         return None

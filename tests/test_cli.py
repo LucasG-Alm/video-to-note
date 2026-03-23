@@ -62,6 +62,7 @@ class TestYoutubeCommand:
             output_dir=None,
             model="llama-3.3-70b-versatile",
             lang="pt",
+            by_chapter=False,
         )
         assert result.exit_code == 0
 
@@ -144,6 +145,18 @@ class TestAppGeral:
         result = runner.invoke(app, [])
         assert "youtube" in result.output.lower()
         assert "local" in result.output.lower()
+
+    def test_by_chapter_flag_repassado_ao_pipeline(self):
+        """M-05 — --by-chapter deve ser repassado como True ao pipeline."""
+        with patch("src.pipeline.youtube_to_notes", return_value=Path("nota.md")) as mock:
+            runner.invoke(app, ["youtube", "https://youtu.be/abc", "--by-chapter"])
+        assert mock.call_args.kwargs.get("by_chapter") is True
+
+    def test_by_chapter_falso_por_padrao(self):
+        """M-05 — sem --by-chapter, pipeline recebe by_chapter=False."""
+        with patch("src.pipeline.youtube_to_notes", return_value=Path("nota.md")) as mock:
+            runner.invoke(app, ["youtube", "https://youtu.be/abc"])
+        assert mock.call_args.kwargs.get("by_chapter") is False
 
     def test_stdout_encoding_utf8(self):
         """

@@ -33,11 +33,12 @@ def youtube(
     output: Annotated[Optional[str], typer.Option("--output", "-o", help="Pasta de destino da nota")] = None,
     lang: Annotated[str, typer.Option("--lang", "-l", help="Idioma da transcrição (ex: pt, en, es)")] = DEFAULT_LANG,
     model: Annotated[str, typer.Option(help="Modelo LLM para geração da nota")] = DEFAULT_MODEL,
+    by_chapter: Annotated[bool, typer.Option("--by-chapter", help="Processar e gerar seções por capítulo")] = False,
 ):
     """Processa um vídeo do YouTube e gera uma nota Markdown."""
     from src.pipeline import youtube_to_notes
 
-    result = youtube_to_notes(url=url, depth=depth.value, output_dir=output, model=model, lang=lang)
+    result = youtube_to_notes(url=url, depth=depth.value, output_dir=output, model=model, lang=lang, by_chapter=by_chapter)
     if result:
         typer.echo(f"✅ Nota gerada: {result}")
     else:
