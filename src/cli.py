@@ -3,11 +3,12 @@ sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 from enum import Enum
 from typing import Optional
+from pathlib import Path
 
 import typer
 from typing import Annotated
 
-from src.config import DEFAULT_MODEL, DEFAULT_DEPTH, DEFAULT_LANG
+from src.config import DEFAULT_MODEL, DEFAULT_DEPTH, DEFAULT_LANG, DEFAULT_OUTPUT_DIR, save_config_to_env
 
 app = typer.Typer(
     name="mtn",
@@ -24,6 +25,29 @@ class Depth(str, Enum):
 
 
 _default_depth = Depth(DEFAULT_DEPTH)
+
+
+@app.command()
+def config(
+    set_output_dir: Annotated[Optional[str], typer.Option("--set-output", help="Define o diretório de saída padrão")] = None,
+    show: Annotated[bool, typer.Option("--show", help="Mostra configuração atual")] = False,
+):
+    """Gerencia configurações do MTN (DEFAULT_OUTPUT_DIR, etc)."""
+    if show:
+        current = DEFAULT_OUTPUT_DIR or "data/04. notes/ (padrão)"
+        typer.echo(f"📋 Configuração atual:")
+        typer.echo(f"   DEFAULT_OUTPUT_DIR = {current}")
+        return
+
+    if set_output_dir:
+        path = Path(set_output_dir)
+        path.mkdir(parents=True, exist_ok=True)
+        save_config_to_env("DEFAULT_OUTPUT_DIR", str(path.absolute()))
+        typer.echo(f"✅ Diretório de saída salvo em .env: {path.absolute()}")
+        return
+
+    # Se nenhuma opção foi fornecida, mostra help
+    typer.echo("Use: mtn config --set-output <caminho>  ou  mtn config --show")
 
 
 @app.command()
