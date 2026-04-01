@@ -16,7 +16,7 @@ def create_app():
     app = typer.Typer(
         name="mtn",
         help="Media to Notes — converte vídeos e áudios em notas Markdown.",
-        no_args_is_help=False,  # Desabilitar help automático para custom dispatch
+        no_args_is_help=True,  # Mostrar help quando nenhum argumento
     )
 
     return app
