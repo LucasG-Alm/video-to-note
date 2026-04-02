@@ -143,12 +143,16 @@ def cli():
     """Wrapper que implementa auto-dispatch para comando 'main'"""
     # Auto-dispatch: se o primeiro argumento não é um subcomando conhecido,
     # assume que é input_source para o comando 'main'
-    known_commands = {"config", "youtube", "local", "--help", "-h", "--version", "--install-completion", "--show-completion"}
+    known_commands = {"config", "youtube", "local"}
 
-    if sys.argv[1:]:
+    if len(sys.argv) > 1:
         first_arg = sys.argv[1]
-        # Se não é uma opção e não é um subcomando conhecido, prepend "main"
-        if first_arg not in known_commands and not first_arg.startswith("-"):
+        # Se não é uma opção global e não é um subcomando conhecido, prepend "main"
+        # Opções globais começam com "-", subcomandos não têm "/" ou "\" (paths)
+        if (
+            not first_arg.startswith("-")
+            and first_arg not in known_commands
+        ):
             sys.argv.insert(1, "main")
 
     app()
