@@ -10,22 +10,65 @@ CLI tool (`mtn`) that converts YouTube videos and local audio/video files into s
 
 ```bash
 poetry install  # venv em AppData\Local\pypoetry\Cache\virtualenvs\ (fora do OneDrive)
+pip install -e .  # instala mtn CLI globalmente
 cp .env.example .env  # add GROQ_API_KEY
 ```
 
 Requires FFmpeg installed and available in PATH for audio processing.
 
+After `pip install -e .`, `mtn` is available globally in the terminal.
+
+### Configuration
+
+**Default output directory:** Notes são salvas em `data/04. notes/` por padrão. Para customizar:
+
+```bash
+# Definir diretório de saída padrão
+mtn config --set-output "C:/caminho/para/notas"
+
+# Verificar configuração atual
+mtn config --show
+```
+
+O valor é salvo automaticamente em `.env` como `DEFAULT_OUTPUT_DIR`.
+
 ## CLI Usage
+
+### Novo padrão (recomendado)
+
+O CLI detecta automaticamente se a entrada é URL do YouTube ou arquivo local:
+
+```bash
+# YouTube (auto-detected)
+mtn "https://youtube.com/watch?v=..."
+mtn "https://youtube.com/watch?v=..." -d avancado
+mtn "https://youtu.be/abc123" --depth intermediario --output "path/to/notes/"
+
+# Local audio/video (auto-detected)
+mtn "audio.mp3"
+mtn "video.mp4" -d metacognitivo
+mtn "C:/Videos/aula.mp4" -d avancado --output "/path/to/notes/"
+```
+
+### Gerenciar configuração
+
+```bash
+# Ver configuração atual
+mtn config --show
+
+# Definir diretório de saída padrão
+mtn config --set-output "C:/Users/lucas/notes/"
+```
+
+### Compatibilidade — subcomandos antigos (ainda funcionam)
 
 ```bash
 # YouTube
-poetry run mtn youtube "https://youtube.com/watch?v=..."
-poetry run mtn youtube "url" --depth avancado
-poetry run mtn youtube "url" --depth intermediario --output "path/to/notes/"
+mtn youtube "url" [--depth raso|intermediario|avancado|metacognitivo] [--output "path"]
+mtn youtube "url" --lang pt --model groq-model
 
-# Local audio/video
-poetry run mtn local "audio.mp3"
-poetry run mtn local "video.mp4" --depth metacognitivo
+# Local
+mtn local "path" [--depth ...] [--output ...]
 ```
 
 ### Depth levels
@@ -48,7 +91,9 @@ poetry run pytest -v       # verbose
 
 ```
 src/
-├── cli.py              # Typer entry point — mtn youtube / mtn local
+├── cli.py              # Typer entry point — mtn <input> / mtn youtube / mtn local
+│                       # Auto-dispatch: detecta tipo de input e roteia para comando correto
+├── config.py           # Config loader (config.toml) + save_config_to_env()
 ├── pipeline.py         # Core pipeline logic for both input types
 ├── services/
 │   ├── youtube.py      # yt-dlp metadata + transcript extraction + Whisper fallback
@@ -56,10 +101,16 @@ src/
 ├── core/
 │   ├── notes2.py       # LangChain + Groq LLM note generation from template
 │   └── audio.py        # Audio chunking (pydub/moviepy — lazy imports for Python 3.13)
-└── utils/utils.py      # print_hex_color helper
+└── utils/
+    ├── input_detector.py # Detecta tipo de input (YouTube URL vs arquivo local)
+    │                      # Valida entrada com mensagens de erro claras
+    └── utils.py          # print_hex_color helper
 
 templates/              # Markdown templates per depth level
 tests/                  # Unit tests (pytest)
+  └── unit/
+      ├── test_cli.py              # CLI command tests
+      └── test_input_detector.py   # Input detection & validation tests
 data/                   # Runtime data — gitignored
   02. audio/
   03. transcriptions/
@@ -67,6 +118,8 @@ data/                   # Runtime data — gitignored
 ```
 
 Key pattern: `pydub` and `moviepy` are imported lazily inside function bodies — do not move them to the top of `audio.py` or `transcription.py` (breaks Python 3.13 due to missing `audioop` module).
+
+**New in v0.2.0:** Auto-dispatch CLI, `mtn config` command, input auto-detection module (`input_detector.py`).
 
 ## Roadmap
 
