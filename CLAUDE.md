@@ -20,7 +20,9 @@ After `pip install -e .`, `mtn` is available globally in the terminal.
 
 ### Configuration
 
-**Default output directory:** Notes são salvas em `data/04. notes/` por padrão. Para customizar:
+**Default output directory:** Notes do YouTube são salvas em `C:\Users\lucas\OneDrive\Documentos\_Obsidian\Principal\_revisar\YouTube` por padrão.
+
+Para customizar:
 
 ```bash
 # Definir diretório de saída padrão
@@ -184,13 +186,25 @@ Documento completo: `docs/Teste - Sessão 2026-03-20.md`
 
 ## Claude Code Skill
 
-A ready-to-use Claude Code skill lives at `.claude/skills/media-to-notes.md`.
+A ready-to-use Claude Code skill for processing YouTube videos and audio/video files lives at `.claude/skills/media-to-notes.md`.
 
-To install it globally:
+**Modo de operação (v0.2.0+):**
+1. User cola link do YouTube → Skill pergunta: "Quer gerar nota?"
+2. Se sim → Pergunta profundidade (raso, intermediario, avancado, metacognitivo)
+3. Executa: `mtn "<url>" --depth <profundidade>` (auto-dispatch)
+4. Salva em: `_revisar/YouTube/<titulo>.md`
+
+Para instalar globalmente:
 ```bash
-# Copy to your Claude Code plugins directory
+# Copy para Claude Code plugins directory
 cp .claude/skills/media-to-notes.md ~/.claude/plugins/local/skills/
 ```
 
-Once installed, Claude Code can process media directly from any conversation:
+Uso no Claude Code:
 > "processa esse vídeo: https://youtu.be/..."
+
+A skill vai:
+- ✅ Detectar que é YouTube
+- ✅ Perguntar se quer gerar nota
+- ✅ Perguntar profundidade
+- ✅ Rodar `mtn "<url>" --depth <depth>` automaticamente

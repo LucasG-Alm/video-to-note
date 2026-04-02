@@ -1,88 +1,103 @@
 ---
 name: media-to-notes
-description: Process a YouTube URL or local audio/video file into a structured Markdown note. Triggers when the user pastes a YouTube link, provides a media file path, or asks to generate a note from a video/audio source.
+description: Convert YouTube videos or local files into Markdown notes using the mtn CLI. Triggers when user pastes a YouTube link or provides a media file path. Asks for confirmation and note depth before processing.
 ---
 
 # Media to Notes Skill
 
-Convert YouTube videos or local audio/video files into structured Markdown notes using the `mtn` CLI.
+Convert YouTube videos or local audio/video files into structured Markdown notes using the `mtn` CLI with auto-detection.
 
 ## Configuration
 
-Before using, set these variables to match your environment:
+Before using, ensure these are set:
 
 ```
-PROJECT_DIR = /path/to/video-to-note   # root of the cloned repo
-VAULT_INBOX  = /path/to/obsidian/_revisar/  # where notes land in your vault (optional)
+PROJECT_DIR = C:\Users\lucas\OneDrive\Documentos\_Obsidian\Principal\Projetos\Programação\Media to Notes
+DEFAULT_OUTPUT_DIR = C:\Users\lucas\OneDrive\Documentos\_Obsidian\Principal\_revisar\YouTube
 ```
+
+Configure with: `mtn config --set-output "<path>"`
 
 ## Trigger conditions
 
-Activate this skill when the user:
-- Pastes a YouTube URL (contains `youtube.com`, `youtu.be`, or `/shorts/`)
-- Provides a path to an audio or video file and wants a note
-- Says: "processa esse vídeo", "gera nota de", "transforma em nota", "note this video", "summarize this"
+Activate this skill when:
+- User pastes a **YouTube URL** (`youtube.com`, `youtu.be`, `/shorts/`) → **ALWAYS ask before processing**
+- User provides a **local file path** (`.mp3`, `.mp4`, `.wav`, `.m4a`, etc.) → **ask if not obvious**
+- User says: "processa esse vídeo", "gera nota de", "transforma em nota", "summarize", "transcreve"
 
 ## Step-by-step
 
-### 1 — Identify input type
+### 1 — YouTube URL detected
 
-- URL containing `youtube.com`, `youtu.be`, `shorts/` → **YouTube mode**
-- File path ending in `.mp3`, `.mp4`, `.wav`, `.m4a`, `.opus`, `.mkv`, `.webm`, etc. → **Local mode**
+When user pastes a YouTube link, ask:
 
-### 2 — Select depth
+> "Quer gerar uma nota para este vídeo?"
+>
+> Se sim, prossiga. Se não, pare.
 
-If the user didn't specify a depth, ask:
+### 2 — Ask for depth
 
 > "Qual profundidade para a nota?"
 > - **raso** — bullets rápidos, máximo 10 linhas
-> - **intermediario** — resumo + pontos principais + aplicações práticas *(padrão)*
+> - **intermediario** — resumo + pontos principais + aplicações *(padrão)*
 > - **avancado** — análise de frameworks, crítica, interconexões
 > - **metacognitivo** — reflexão profunda, impacto pessoal
 
-If the user seems in a hurry or the content is short, default to `intermediario` without asking.
+Always ask unless the user explicitly specifies a depth. If unsure, default to `intermediario`.
 
-### 3 — Run the CLI
+### 3 — Run the CLI (OBRIGATÓRIO)
 
-From `PROJECT_DIR`, run the appropriate command:
+Use the **new unified CLI command** with auto-dispatch:
 
-**YouTube:**
 ```bash
-cd <PROJECT_DIR>
-poetry run mtn youtube "<url>" --depth <depth>
-# To output directly to Obsidian vault inbox:
-poetry run mtn youtube "<url>" --depth <depth> --output "<VAULT_INBOX>"
+cd C:\Users\lucas\OneDrive\Documentos\_Obsidian\Principal\Projetos\Programação\Media to Notes
+poetry run mtn "<url>" --depth <depth>
 ```
 
-**Local file:**
+**Examples:**
 ```bash
-cd <PROJECT_DIR>
-poetry run mtn local "<file_path>" --depth <depth>
-# With vault output:
-poetry run mtn local "<file_path>" --depth <depth> --output "<VAULT_INBOX>"
+poetry run mtn "https://www.youtube.com/watch?v=..." --depth intermediario
+poetry run mtn "https://youtu.be/abc123" -d avancado
+poetry run mtn "C:\path\to\audio.mp3" --depth raso
 ```
 
-### 4 — Confirm
+The CLI auto-detects:
+- If input is YouTube URL → runs YouTube pipeline
+- If input is file path → runs local file pipeline
+- Saves to `DEFAULT_OUTPUT_DIR` (currently: `_revisar/YouTube`)
 
-Report the generated note path to the user. If `--output` pointed to the Obsidian vault, mention the note is ready in the inbox.
+### 4 — Confirm to user
+
+Report the generated note path. Example:
+> ✅ Nota gerada: C:\Users\lucas\OneDrive\Documentos\_Obsidian\Principal\_revisar\YouTube\<titulo>.md
 
 ## Available depth templates
 
-| Depth | File | Style |
-|-------|------|-------|
-| `raso` | `template_youtube_raso.md` | Quick bullets, ≤ 10 lines |
-| `intermediario` | `template_youtube_intermediario.md` | Resumo + pontos + aplicações |
-| `avancado` | `template_youtube_avancado.md` | Tese + frameworks + análise crítica |
-| `metacognitivo` | `template_youtube_metacognitivo.md` | Reflexão + tensão + impacto pessoal |
+| Depth | Style |
+|-------|-------|
+| `raso` | Quick bullets, ≤ 10 lines |
+| `intermediario` | Resumo + pontos principais + aplicações práticas |
+| `avancado` | Análise de frameworks, crítica, interconexões |
+| `metacognitivo` | Reflexão profunda, impacto pessoal |
+
+## Key points
+
+✅ **Always** use the unified `mtn "<input>" --depth <depth>` syntax
+✅ **Always** ask user before processing YouTube links
+✅ **Always** ask for depth (unless specified)
+✅ **Never** use old syntax (`mtn youtube` or `mtn local`)
+✅ Auto-detection handles YouTube URLs and local files automatically
 
 ## Requirements
 
-- `GROQ_API_KEY` in `.env` at `PROJECT_DIR`
+- `GROQ_API_KEY` in `.env`
 - FFmpeg installed and in PATH
 - `poetry install` run at least once
+- `DEFAULT_OUTPUT_DIR` configured to `_revisar/YouTube`
 
 ## Notes
 
-- Default note output (no `--output`): `data/04. notes/Youtube/<title>.md`
-- The pipeline tries to get YouTube captions first; falls back to Groq Whisper if none available
-- Audio files > 25 MB are automatically chunked before transcription
+- Default output: `C:\Users\lucas\OneDrive\Documentos\_Obsidian\Principal\_revisar\YouTube\<title>.md`
+- YouTube transcripts use captions first; falls back to Groq Whisper
+- Audio files > 25 MB auto-chunked before transcription
+- CLI version: v0.2.0+ (with auto-dispatch)
