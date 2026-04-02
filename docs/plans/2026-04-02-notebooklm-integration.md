@@ -1,259 +1,295 @@
-# NotebookLM Integration Plan
+# NotebookLM Integration Plan — Updated
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> Atualizad com abordagem baseada em capítulos do YouTube
 
-**Goal:** Integrate NotebookLM-py to handle long videos (ERR-02) by extracting chapter summaries instead of sending raw transcription to Groq, reducing token usage by ~90%.
+**Goal:** Integrar NotebookLM-py para resumir capítulos de vídeos longos (> 30 min) ao invés de enviar transcrição bruta ao Groq, reduzindo uso de tokens em ~90%.
+
+**Key Insight:** YouTube videos já têm chapters metadata. Use NotebookLM apenas para **sumarizar por capítulo** com as palavras do apresentador, in lugar de extrair chapters.
 
 **Architecture:** 
-- Create `NotebookLMClient` wrapper in `src/services/notebooklm.py` that uploads media to NotebookLM, extracts chapter summaries, and returns structured data
-- Add video duration detection to `pipeline.py` — if > 30min, try NotebookLM first, fallback to Groq Whisper
-- Modify `youtube_to_notes()` to accept NotebookLM output in place of raw transcription
-- Graceful fallback: if NotebookLM API breaks or upload fails, silently fall back to existing Groq pipeline
+- CLI command `mtn config --setup-notebooklm` → Google OAuth → cria 1 notebook reutilizável
+- NotebookLMClient wrapper: `.add_youtube_source()` + `.summarize_chapter()` + `.remove_source()`
+- YouTube chapters extraídos via yt-dlp, armazenados em JSON
+- Pipeline: long video detectado → remove source anterior → add novo video → loop por chapters → pedir resumo de cada um → acumular na nota
+- Fallback gracioso: se NotebookLM fail, volta pra Groq pipeline normal
 
-**Tech Stack:** `notebooklm-py` (pip), `langchain_groq`, existing `src/services/transcription.py`, `src/core/notes2.py`
+**Tech Stack:** `notebooklm` CLI (via `/notebooklm` skill), `yt-dlp` (chapters), `langchain_groq`, `src/services/transcription.py`, `src/config.py`
+
+**Nota:** Usa CLI `notebooklm` (já instalado via skill) em vez de lib Python diretamente — mais simples, bem testado, com tratamento de erro robusto.
 
 ---
 
-## Task 1: Investigate NotebookLM-py API & Document Response Format
+## Task 0: Setup NotebookLM OAuth & Create Reusable Notebook
 
 **Files:**
-- Research: `notebooklm-py` package (pip install notebooklm-py)
-- Create: `docs/notebooklm-api-investigation.md` (reference doc, not code)
+- Create: `src/services/notebooklm_cli.py` — wrapper around CLI `notebooklm`
+- Modify: `src/cli.py` — add `config --setup-notebooklm` command
+- Modify: `src/config.py` — add `NOTEBOOKLM_*` config keys
 
-- [ ] **Step 1: Install notebooklm-py and explore package structure**
+**Approach:** Use `notebooklm` CLI (via `/notebooklm` skill) para criar notebook e armazenar ID. Wrapper encapsula chamadas CLI com subprocess.
 
-```bash
-cd "C:\Users\lucas\OneDrive\Documentos\_Obsidian\Principal\Projetos\Programação\Media to Notes"
-poetry add notebooklm-py
-poetry run python -c "import notebooklm; print(notebooklm.__file__)"
-```
+- [ ] **Step 1: Create CLI wrapper**
 
-- [ ] **Step 2: Read notebooklm-py documentation & source code**
+File: `src/services/notebooklm_cli.py`
 
-Explore the package to understand:
-- How to instantiate a client (auth mechanism — likely Google OAuth or API key)
-- How to upload audio/video file
-- How to extract chapters from uploaded material
-- How to get summaries per chapter
-- What data structure is returned (dict? object with properties?)
-- Error handling (what exceptions are raised?)
-- Rate limits / quotas
-
-Save findings to `docs/notebooklm-api-investigation.md` with:
-- Example API call (pseudocode)
-- Expected response structure (JSON/object shape)
-- Known limitations (file size, duration, auth requirements)
-- Failure modes (what happens if file too large, API rate limit, auth fails)
-
-- [ ] **Step 3: Create minimal working example (outside test)**
-
-```bash
-poetry run python -c "
-from notebooklm import NotebookLM
-# Pseudo: create client, upload dummy file, extract chapters
-# Print response structure so we know what to expect in Task 2
-"
-```
-
-Document the response in `docs/notebooklm-api-investigation.md`. Example:
 ```python
-# Expected response structure (fill in actual structure):
-{
-    'chapters': [
-        {'title': str, 'summary': str, 'start_time': float, 'end_time': float},
-        ...
-    ],
-    'overall_summary': str,
-    'duration': int,  # seconds
+"""NotebookLM CLI wrapper for notebook and source management."""
+
+import subprocess
+import json
+from src.utils.utils import print_hex_color
+
+def run_notebooklm(command: str, json_output: bool = False) -> dict | str | None:
+    """
+    Run notebooklm CLI command and return output.
+    
+    Args:
+        command: Full CLI command string, e.g., "list --json"
+        json_output: If True, parse and return JSON; else return stdout
+    
+    Returns:
+        Parsed JSON dict if json_output=True, else stdout string, or None if failed
+    """
+    try:
+        cmd = f"notebooklm {command}"
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+        
+        if result.returncode != 0:
+            print_hex_color('#f0a500', f"⚠️  notebooklm failed: {result.stderr}", "")
+            return None
+        
+        if json_output:
+            return json.loads(result.stdout)
+        return result.stdout.strip()
+    except Exception as e:
+        print_hex_color('#f0a500', f"⚠️  Error running notebooklm: {e}", "")
+        return None
+
+def setup_oauth_and_create_notebook() -> tuple[str, bool]:
+    """
+    Run `notebooklm login` and create reusable notebook.
+    
+    Returns:
+        (notebook_id, success)
+    """
+    print("🔐 NotebookLM OAuth Setup")
+    print("📖 Opening browser for Google login...")
+    
+    # Trigger login
+    result = run_notebooklm("login")
+    if not result:
+        return None, False
+    
+    # Verify auth
+    status = run_notebooklm("status")
+    if not status:
+        return None, False
+    
+    # Create notebook
+    output = run_notebooklm('create "Media to Notes - Processing" --json', json_output=True)
+    if not output or 'id' not in output:
+        return None, False
+    
+    return output['id'], True
+```
+
+- [ ] **Step 2: Add CLI command for setup**
+
+File: `src/cli.py` (append to existing `app = typer.Typer()`)
+
+```python
+@app.command("config")
+def config_command(
+    setup_notebooklm: bool = typer.Option(False, "--setup-notebooklm"),
+    show: bool = typer.Option(False, "--show"),
+):
+    """Manage mtn configuration."""
+    if show:
+        from src.config import get_config
+        cfg = get_config()
+        print(f"Output dir: {cfg.get('DEFAULT_OUTPUT_DIR')}")
+        print(f"NotebookLM: {cfg.get('NOTEBOOKLM_NOTEBOOK_ID', 'Not set')}")
+        return
+    
+    if setup_notebooklm:
+        from src.services.notebooklm_cli import setup_oauth_and_create_notebook
+        from src.config import save_config_to_env
+        
+        nb_id, success = setup_oauth_and_create_notebook()
+        if success:
+            save_config_to_env({"NOTEBOOKLM_NOTEBOOK_ID": nb_id})
+            print(f"✅ Setup complete! Notebook: {nb_id}")
+        else:
+            print(f"❌ Setup failed")
+```
+
+- [ ] **Step 3: Update config schema**
+
+File: `src/config.py` (find `VALID_CONFIG_KEYS`)
+
+```python
+VALID_CONFIG_KEYS = {
+    "DEFAULT_OUTPUT_DIR": str,
+    "GROQ_API_KEY": str,
+    "NOTEBOOKLM_NOTEBOOK_ID": str,      # NEW
+    "NOTEBOOKLM_LAST_SOURCE_ID": str,   # Track for cleanup
 }
 ```
 
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/services/notebooklm_cli.py src/cli.py src/config.py
+git commit -m "feat: add NotebookLM CLI setup and notebook creation"
+```
+
 ---
 
-## Task 2: Create NotebookLMClient Wrapper with Tests
+## Task 1: Create NotebookLMClient Wrapper for Chapter Summarization
 
 **Files:**
-- Create: `src/services/notebooklm.py`
+- Modify: `src/services/notebooklm_cli.py` — add methods for source management and queries
 - Create: `tests/unit/test_notebooklm.py`
 
-- [ ] **Step 1: Write failing test for NotebookLMClient initialization**
+**Approach:** Extend CLI wrapper with `add_source()`, `remove_source()`, `ask_chapter()` methods.
+
+- [ ] **Step 1: Extend CLI wrapper with source/chat methods**
+
+File: `src/services/notebooklm_cli.py` (append to existing)
+
+```python
+class NotebookLMClient:
+    """Wrapper for NotebookLM CLI with notebook-specific operations."""
+    
+    def __init__(self, notebook_id: str):
+        self.notebook_id = notebook_id
+    
+    def add_youtube_source(self, url: str) -> dict:
+        """Add YouTube video to notebook. Returns {source_id, title, status}."""
+        output = run_notebooklm(
+            f'source add "{url}" -n {self.notebook_id} --json',
+            json_output=True
+        )
+        if output and 'source_id' in output:
+            return {'source_id': output['source_id'], 'title': output.get('title', 'Video'), 'status': output.get('status', 'processing')}
+        return {'source_id': None, 'title': None, 'status': None}
+    
+    def remove_source(self, source_id: str) -> bool:
+        """Remove source from notebook."""
+        result = run_notebooklm(f'source delete {source_id} -n {self.notebook_id}', json_output=False)
+        return result is not None
+    
+    def wait_for_source(self, source_id: str, timeout: int = 120) -> bool:
+        """Wait for source to be ready."""
+        result = run_notebooklm(f'source wait {source_id} -n {self.notebook_id} --timeout {timeout}', json_output=False)
+        return result is not None
+    
+    def summarize_chapter(self, chapter_title: str, start_time: int = 0, end_time: int = 0) -> str:
+        """Ask NotebookLM to summarize a chapter."""
+        query = f'Faça um breve resumo do capítulo "{chapter_title}" (aprox. {start_time}s a {end_time}s), usando as palavras dos apresentadores, com referências e palavras-chave.'
+        
+        output = run_notebooklm(
+            f'ask "{query}" -n {self.notebook_id} --json',
+            json_output=True
+        )
+        if output and 'answer' in output:
+            return output['answer']
+        return ""
+```
+
+- [ ] **Step 2: Write test for NotebookLMClient**
 
 File: `tests/unit/test_notebooklm.py`
 
 ```python
 import pytest
-from src.services.notebooklm import NotebookLMClient
+from unittest.mock import patch
+from src.services.notebooklm_cli import NotebookLMClient
 
 def test_notebooklm_client_init():
-    """Client should initialize without raising."""
-    client = NotebookLMClient()
-    assert client is not None
-```
+    """Client initializes with notebook_id."""
+    client = NotebookLMClient("nb-123")
+    assert client.notebook_id == "nb-123"
 
-Run: `poetry run pytest tests/unit/test_notebooklm.py::test_notebooklm_client_init -v`
-Expected: FAIL — "module notebooklm not found" or "NotebookLMClient not defined"
-
-- [ ] **Step 2: Write minimal NotebookLMClient class**
-
-File: `src/services/notebooklm.py`
-
-```python
-"""NotebookLM API wrapper for extracting chapter summaries from long videos."""
-
-class NotebookLMClient:
-    """Wrapper around notebooklm-py to upload media and extract structured summaries."""
-    
-    def __init__(self):
-        """Initialize NotebookLM client. Auth is handled by notebooklm-py internally."""
-        # Import here to allow graceful degradation if package not installed
-        try:
-            from notebooklm import NotebookLM
-            self.client = NotebookLM()
-        except ImportError:
-            raise ImportError("notebooklm-py not installed. Run: pip install notebooklm-py")
-        except Exception as e:
-            # Auth failure, quota exceeded, etc. — log but don't crash
-            self.client = None
-            self._init_error = str(e)
-```
-
-Run: `poetry run pytest tests/unit/test_notebooklm.py::test_notebooklm_client_init -v`
-Expected: PASS
-
-- [ ] **Step 3: Write test for upload & extract chapters**
-
-File: `tests/unit/test_notebooklm.py`
-
-```python
-import pytest
-from unittest.mock import Mock, patch
-from src.services.notebooklm import NotebookLMClient
-
-def test_extract_chapters_returns_structured_data():
-    """extract_chapters should return dict with 'chapters' and 'summary' keys."""
-    with patch('src.services.notebooklm.NotebookLM') as mock_nlm:
-        mock_instance = Mock()
-        mock_nlm.return_value = mock_instance
+def test_add_youtube_source():
+    """add_youtube_source parses CLI output."""
+    with patch('src.services.notebooklm_cli.run_notebooklm') as mock_run:
+        mock_run.return_value = {'source_id': 'src-abc', 'title': 'Video Title', 'status': 'processing'}
         
-        # Mock response structure (based on investigation in Task 1)
-        mock_instance.upload_from_file.return_value = {'notebook_id': 'test-123'}
-        mock_instance.extract_chapters.return_value = [
-            {'title': 'Intro', 'summary': 'Chapter 1 content', 'start': 0, 'end': 300},
-            {'title': 'Main', 'summary': 'Chapter 2 content', 'start': 300, 'end': 1200},
-        ]
+        client = NotebookLMClient("nb-123")
+        result = client.add_youtube_source("https://youtube.com/watch?v=abc")
         
-        client = NotebookLMClient()
-        result = client.extract_chapters('dummy_path.mp4')
-        
-        assert 'chapters' in result
-        assert len(result['chapters']) == 2
-        assert result['chapters'][0]['title'] == 'Intro'
+        assert result['source_id'] == 'src-abc'
+        assert result['title'] == 'Video Title'
 
-def test_extract_chapters_handles_missing_client():
-    """If client init failed, extract_chapters should return empty gracefully."""
-    with patch('src.services.notebooklm.NotebookLM', side_effect=ImportError("No auth")):
-        client = NotebookLMClient()
-        result = client.extract_chapters('dummy_path.mp4')
-        assert result == {'chapters': [], 'summary': None}
-```
+def test_summarize_chapter():
+    """summarize_chapter returns answer from CLI."""
+    with patch('src.services.notebooklm_cli.run_notebooklm') as mock_run:
+        mock_run.return_value = {'answer': 'Chapter summary text...'}
+        
+        client = NotebookLMClient("nb-123")
+        summary = client.summarize_chapter("Intro", 0, 300)
+        
+        assert summary == 'Chapter summary text...'
 
-Run: `poetry run pytest tests/unit/test_notebooklm.py::test_extract_chapters_returns_structured_data -v`
-Expected: FAIL — "extract_chapters not defined"
-
-- [ ] **Step 4: Implement extract_chapters method**
-
-File: `src/services/notebooklm.py`
-
-```python
-def extract_chapters(self, file_path: str, timeout: int = 300) -> dict:
-    """
-    Upload file to NotebookLM and extract chapter summaries.
-    
-    Args:
-        file_path: Local path to audio/video file
-        timeout: Max seconds to wait for processing
+def test_remove_source():
+    """remove_source calls CLI delete."""
+    with patch('src.services.notebooklm_cli.run_notebooklm') as mock_run:
+        mock_run.return_value = "Deleted"
         
-    Returns:
-        {'chapters': [{'title': str, 'summary': str}, ...], 'summary': str}
-        Returns empty if client unavailable or upload fails.
-    """
-    if not self.client:
-        return {'chapters': [], 'summary': None}
-    
-    try:
-        # Step 1: Upload file to NotebookLM
-        notebook_id = self.client.upload_from_file(file_path)
+        client = NotebookLMClient("nb-123")
+        result = client.remove_source("src-abc")
         
-        # Step 2: Extract chapters (blocks until processing done or timeout)
-        chapters_raw = self.client.extract_chapters(notebook_id, timeout=timeout)
-        
-        # Step 3: Structure response
-        chapters = [
-            {
-                'title': ch.get('title', f'Chapter {i+1}'),
-                'summary': ch.get('summary', ''),
-                'start': ch.get('start', 0),
-                'end': ch.get('end', 0),
-            }
-            for i, ch in enumerate(chapters_raw)
-        ]
-        
-        overall_summary = self.client.get_summary(notebook_id)
-        
-        return {
-            'chapters': chapters,
-            'summary': overall_summary,
-        }
-    except Exception as e:
-        # Log error but don't crash — fallback to Groq
-        from src.utils.utils import print_hex_color
-        print_hex_color('#f0a500', f"⚠️  NotebookLM failed: {str(e)}", "")
-        return {'chapters': [], 'summary': None}
+        assert result is True
 ```
 
 Run: `poetry run pytest tests/unit/test_notebooklm.py -v`
-Expected: All tests PASS
+Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-git add src/services/notebooklm.py tests/unit/test_notebooklm.py
-git commit -m "feat: add NotebookLMClient wrapper with extract_chapters"
+git add src/services/notebooklm_cli.py tests/unit/test_notebooklm.py
+git commit -m "feat: add NotebookLMClient CLI wrapper for chapter summarization"
 ```
 
 ---
 
-## Task 3: Add Video Duration Detection to YouTube Pipeline
+## Task 2: Store YouTube Chapters in Transcription JSON
 
 **Files:**
-- Modify: `src/services/youtube.py:get_video_metadata()` — ensure it returns duration_sec
-- Create: `src/utils/duration_utils.py`
+- Modify: `src/services/youtube.py:get_video_metadata()` — extract chapters
+- Create: `src/utils/duration_utils.py` — threshold detection
 - Create: `tests/unit/test_duration_utils.py`
 
-- [ ] **Step 1: Write test for duration detection**
+- [ ] **Step 1: Ensure youtube.py returns chapters**
 
-File: `tests/unit/test_duration_utils.py`
+File: `src/services/youtube.py:get_video_metadata()`
 
 ```python
-import pytest
-from src.utils.duration_utils import is_long_video
-
-def test_is_long_video_threshold_30_minutes():
-    """Videos > 30 minutes should be marked as long."""
-    assert is_long_video(1801) is True   # 30min 1sec in seconds
-    assert is_long_video(1800) is False  # exactly 30min
-    assert is_long_video(900) is False   # 15min
-
-def test_is_long_video_handles_zero_duration():
-    """If duration is 0 (unknown), treat as short."""
-    assert is_long_video(0) is False
-    assert is_long_video(None) is False
+def get_video_metadata(url):
+    """Extract metadata including chapters from YouTube."""
+    with YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+    
+    chapters = info.get('chapters', [])
+    
+    return {
+        'title': info.get('title', 'Unknown'),
+        'duration_sec': info.get('duration', 0),
+        'chapters': [
+            {
+                'title': ch.get('title', f'Chapter {i+1}'),
+                'start_time': ch.get('start_time', 0),
+                'end_time': ch.get('end_time', 0),
+            }
+            for i, ch in enumerate(chapters)
+        ],
+        # ... rest of metadata ...
+    }
 ```
 
-Run: `poetry run pytest tests/unit/test_duration_utils.py -v`
-Expected: FAIL — "module duration_utils not found"
-
-- [ ] **Step 2: Implement is_long_video**
+- [ ] **Step 2: Create duration threshold utility**
 
 File: `src/utils/duration_utils.py`
 
@@ -263,402 +299,253 @@ File: `src/utils/duration_utils.py`
 LONG_VIDEO_THRESHOLD_SECONDS = 30 * 60  # 30 minutes
 
 def is_long_video(duration_seconds: int | float | None) -> bool:
-    """
-    Determine if a video is long enough to warrant NotebookLM preprocessing.
-    
-    Args:
-        duration_seconds: Video duration in seconds (or None/0 if unknown)
-        
-    Returns:
-        True if duration > 30 min, False otherwise
-    """
+    """True if duration > 30 min."""
     if not duration_seconds:
         return False
     return duration_seconds > LONG_VIDEO_THRESHOLD_SECONDS
 ```
 
-Run: `poetry run pytest tests/unit/test_duration_utils.py -v`
-Expected: PASS
-
-- [ ] **Step 3: Verify youtube.py returns duration_sec in metadata**
-
-Read `src/services/youtube.py:get_video_metadata()` — ensure it returns `duration_sec` key. If not, add it:
+File: `tests/unit/test_duration_utils.py`
 
 ```python
-def get_video_metadata(url):
-    """... existing code ..."""
-    with YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-    
-    return {
-        'title': info.get('title', 'Unknown'),
-        'duration_sec': info.get('duration', 0),  # ensure this key exists
-        # ... rest of metadata ...
-    }
+import pytest
+from src.utils.duration_utils import is_long_video
+
+def test_is_long_video_threshold_30_minutes():
+    """Videos > 30 minutes marked as long."""
+    assert is_long_video(1801) is True   # 30min 1sec
+    assert is_long_video(1800) is False  # exactly 30min
+    assert is_long_video(900) is False   # 15min
+    assert is_long_video(0) is False
+    assert is_long_video(None) is False
 ```
 
-Test: `poetry run pytest tests/unit/test_youtube.py -v` (should still pass)
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-git add src/utils/duration_utils.py tests/unit/test_duration_utils.py src/services/youtube.py
-git commit -m "feat: add long video detection utility"
+git add src/services/youtube.py src/utils/duration_utils.py tests/unit/test_duration_utils.py
+git commit -m "feat: extract YouTube chapters and add duration threshold"
 ```
 
 ---
 
-## Task 4: Modify Pipeline to Use NotebookLM for Long Videos
+## Task 3: Modify Pipeline to Use NotebookLM for Chapter Summarization
 
 **Files:**
-- Modify: `src/pipeline.py:youtube_to_notes()` — add NotebookLM preprocessing for long videos
+- Modify: `src/pipeline.py:youtube_to_notes()` — add chapter summarization flow
+- Create: `tests/integration/test_pipeline_notebooklm.py`
 
-- [ ] **Step 1: Write test for long video preprocessing**
+- [ ] **Step 1: Write integration test**
 
-File: Create test in `tests/integration/test_pipeline_notebooklm.py`
+File: `tests/integration/test_pipeline_notebooklm.py`
 
 ```python
 import pytest
-from unittest.mock import patch, Mock
+from unittest.mock import patch
+from pathlib import Path
 from src.pipeline import youtube_to_notes
 
-def test_youtube_to_notes_uses_notebooklm_for_long_video():
-    """If video > 30min and NotebookLM available, should use chapter summaries."""
-    
-    with patch('src.pipeline.get_video_metadata') as mock_metadata, \
-         patch('src.pipeline.NotebookLMClient') as mock_nlm_class, \
-         patch('src.pipeline.gerar_nota_md') as mock_gerar, \
-         patch('src.pipeline.is_long_video') as mock_is_long:
-        
-        # Setup mocks
-        mock_metadata.return_value = {
-            'title': 'Long Video',
-            'duration_sec': 3600,  # 1 hour
-            'chapters': [{'title': 'Intro', 'start_time': 0}],
-        }
-        mock_is_long.return_value = True
-        
-        mock_nlm = Mock()
-        mock_nlm_class.return_value = mock_nlm
-        mock_nlm.extract_chapters.return_value = {
-            'chapters': [
-                {'title': 'Intro', 'summary': 'Introduction content'},
-                {'title': 'Main', 'summary': 'Main content'},
-            ],
-            'summary': 'Overall summary',
-        }
-        
-        mock_gerar.return_value = Path('test.md')
-        
-        # Call
-        result = youtube_to_notes(
-            'https://youtube.com/watch?v=test123',
-            depth='intermediario'
-        )
-        
-        # Assert NotebookLM was called
-        assert mock_nlm.extract_chapters.called
-
-def test_youtube_to_notes_fallback_to_groq_if_notebooklm_fails():
-    """If NotebookLM fails, should fallback to Groq Whisper silently."""
-    
-    with patch('src.pipeline.is_long_video', return_value=True), \
-         patch('src.pipeline.NotebookLMClient') as mock_nlm_class, \
-         patch('src.pipeline.get_transcript_with_yt_dlp') as mock_transcript, \
+def test_youtube_to_notes_uses_notebooklm_for_long_video_with_chapters():
+    """Long video with chapters uses NotebookLM summarization."""
+    with patch('src.pipeline.get_video_metadata') as mock_meta, \
+         patch('src.pipeline.NotebookLMClient') as mock_nlm_cls, \
+         patch('src.pipeline.is_long_video', return_value=True), \
          patch('src.pipeline.gerar_nota_md') as mock_gerar:
         
-        # NotebookLM returns empty (failed)
-        mock_nlm = Mock()
-        mock_nlm_class.return_value = mock_nlm
-        mock_nlm.extract_chapters.return_value = {'chapters': [], 'summary': None}
+        mock_meta.return_value = {
+            'title': 'Long Video',
+            'duration_sec': 3600,
+            'chapters': [
+                {'title': 'Intro', 'start_time': 0, 'end_time': 300},
+                {'title': 'Main', 'start_time': 300, 'end_time': 3000},
+            ]
+        }
         
-        # Should fallback to transcript
-        mock_transcript.return_value = [{'start': 0, 'text': 'Transcript'}]
-        mock_gerar.return_value = Path('test.md')
+        mock_nlm = mock_nlm_cls.return_value
+        mock_nlm.add_youtube_source.return_value = {'source_id': 'src-1', 'title': 'Video', 'status': 'processing'}
+        mock_nlm.summarize_chapter.side_effect = ["Summary 1", "Summary 2"]
+        mock_nlm.wait_for_source.return_value = True
         
-        result = youtube_to_notes(
-            'https://youtube.com/watch?v=test123',
-            depth='intermediario'
-        )
+        mock_gerar.return_value = Path('note.md')
         
-        # Assert transcript fallback was used
-        assert mock_transcript.called
+        result = youtube_to_notes('https://youtube.com/watch?v=abc', depth='intermediario')
+        
+        assert mock_nlm.add_youtube_source.called
+        assert mock_nlm.summarize_chapter.call_count == 2
 ```
 
-Run: `poetry run pytest tests/integration/test_pipeline_notebooklm.py -v`
-Expected: FAIL — tests not implemented yet
+- [ ] **Step 2: Add NotebookLM flow to youtube_to_notes()**
 
-- [ ] **Step 2: Modify youtube_to_notes() in pipeline.py**
+File: `src/pipeline.py` (find `def youtube_to_notes()`)
 
-File: `src/pipeline.py`
-
-Add imports at top:
-
+Add imports:
 ```python
-from src.services.notebooklm import NotebookLMClient
+from src.services.notebooklm_cli import NotebookLMClient
 from src.utils.duration_utils import is_long_video
 ```
 
-Modify `youtube_to_notes()` function (around line 88):
-
+Add before Groq fallback logic:
 ```python
-def youtube_to_notes(
-    url: str,
-    depth: str = DEFAULT_DEPTH,
-    output_dir: str = None,
-    model: str = DEFAULT_MODEL,
-    lang: str = DEFAULT_LANG,
-    pasta_destino: str = "",
-    delay: bool = False,
-    by_chapter: bool = False,
-):
-    """Pipeline completo: YouTube URL → [NotebookLM OR Groq] → nota Markdown."""
-    video_id = extract_video_id(url)
-    if not video_id:
-        print_hex_color('#f92f60', "❌ Não foi possível extrair o ID do vídeo.", f"URL: {url}")
-        return None
-
-    metadata = get_video_metadata(url)
-    if not metadata:
-        print_hex_color('#f92f60', "❌ Falha ao obter metadados.", "")
-        return None
-
-    title = sanitize_filename(metadata['title'])
-    print_hex_color('#32cbff', "🎬 Processando:", title)
-
-    json_path = PROJECT_ROOT / "data/03. transcriptions/Youtube" / pasta_destino / f"{title}.json"
-
-    # === NEW: Try NotebookLM for long videos ===
-    if is_long_video(metadata.get('duration_sec', 0)):
-        print_hex_color('#32cbff', "📖 Vídeo longo detectado — tentando NotebookLM...", "")
-        nlm_client = NotebookLMClient()
-        
-        # Try to get audio path for upload
-        audio_path = PROJECT_ROOT / "data/02. audio/Youtube" / pasta_destino / f"{title}.m4a"
-        if not audio_path.exists():
-            audio_dir = str(audio_path.parent)
-            audio_path = download_audio_from_youtube(url, audio_dir)
-        
-        if audio_path:
-            nlm_result = nlm_client.extract_chapters(str(audio_path))
-            
-            if nlm_result['chapters']:
-                print_hex_color('#0bd271', f"✅ NotebookLM: {len(nlm_result['chapters'])} capítulos extraídos", "")
-                # Use NotebookLM summaries instead of raw transcript
-                final_transcript = {
-                    'text': nlm_result['summary'] or "Síntese via NotebookLM",
-                    'segments': [
-                        {
-                            'start': ch.get('start', 0),
-                            'duration': ch.get('end', 0) - ch.get('start', 0),
-                            'text': ch['summary'],
-                        }
-                        for ch in nlm_result['chapters']
-                    ],
-                }
-                metadata['transcription_by'] = 'NotebookLM'
-                salvar_transcricao(metadata, final_transcript, str(json_path))
-                
-                try:
-                    output = gerar_nota_md(
-                        path_transcricao_json=str(json_path),
-                        path_template_md=resolve_template(depth),
-                        metadata={"tags_md": "YouTube/Vídeo/NotebookLM"},
-                        model=model,
-                        output_dir=output_dir,
-                    )
-                    
-                    if delay:
-                        wait = random.uniform(90, 150)
-                        print(f"Aguardando {round(wait, 2)}s para não tomar bloco 🚫")
-                        time.sleep(wait)
-                    
-                    return output
-                except Exception as e:
-                    print_hex_color('#f0a500', f"⚠️  Erro ao processar NotebookLM: {e} — voltando ao Groq", "")
-                    # Fall through to Groq below
+def youtube_to_notes(...):
+    """Pipeline: YouTube URL → [NotebookLM if long + chapters] OR [Groq] → note"""
+    # ... existing metadata extraction ...
     
-    # === EXISTING: Groq fallback (unchanged) ===
-    # [rest of existing code from line ~115 onwards]
-    if json_path.exists():
-        import json as _json
-        print_hex_color('#32cbff', "♻️  Transcrição em cache, pulando download.", "")
-        with open(json_path, encoding='utf-8') as f:
-            cached = _json.load(f)
-        final_transcript = cached.get('transcription', {})
-        metadata = {**cached.get('metadata', metadata), **{k: v for k, v in metadata.items() if k not in cached.get('metadata', {})}}
-    else:
-        # ... rest of existing transcription logic unchanged ...
+    # === NEW: Try NotebookLM for long videos with chapters ===
+    if is_long_video(metadata.get('duration_sec', 0)) and metadata.get('chapters'):
+        print_hex_color('#32cbff', "📖 Vídeo longo com capítulos — tentando NotebookLM...", "")
+        
+        try:
+            from src.config import get_config, save_config_to_env
+            config = get_config()
+            nb_id = config.get('NOTEBOOKLM_NOTEBOOK_ID')
+            
+            if nb_id:
+                nlm_client = NotebookLMClient(nb_id)
+                
+                # Clean up old source
+                old_id = config.get('NOTEBOOKLM_LAST_SOURCE_ID')
+                if old_id:
+                    nlm_client.remove_source(old_id)
+                
+                # Add video
+                src_info = nlm_client.add_youtube_source(url)
+                if src_info['source_id']:
+                    print_hex_color('#0bd271', f"✅ Vídeo carregado: {src_info['title']}", "")
+                    
+                    # Wait for source processing
+                    nlm_client.wait_for_source(src_info['source_id'])
+                    
+                    # Summarize chapters
+                    summaries = []
+                    for i, ch in enumerate(metadata.get('chapters', []), 1):
+                        print_hex_color('#32cbff', f"📝 Resumindo {i}/{len(metadata['chapters'])}: {ch['title']}", "")
+                        summary = nlm_client.summarize_chapter(
+                            ch['title'],
+                            ch.get('start_time', 0),
+                            ch.get('end_time', 0)
+                        )
+                        summaries.append({'chapter': ch['title'], 'summary': summary})
+                    
+                    # Save and generate note
+                    metadata['chapter_summaries'] = summaries
+                    metadata['transcription_by'] = 'NotebookLM'
+                    salvar_transcricao(metadata, {}, str(json_path))
+                    save_config_to_env({'NOTEBOOKLM_LAST_SOURCE_ID': src_info['source_id']})
+                    
+                    try:
+                        output = gerar_nota_md(
+                            path_transcricao_json=str(json_path),
+                            path_template_md=resolve_template(depth),
+                            metadata={"tags_md": "YouTube/Vídeo/NotebookLM", "chapter_summaries": summaries},
+                            model=model,
+                            output_dir=output_dir,
+                        )
+                        if delay:
+                            import random, time
+                            wait = random.uniform(90, 150)
+                            time.sleep(wait)
+                        return output
+                    except Exception as e:
+                        print_hex_color('#f0a500', f"⚠️  Erro ao gerar nota: {e}", "")
+        except Exception as e:
+            print_hex_color('#f0a500', f"⚠️  NotebookLM failed: {e}", "")
+    
+    # === EXISTING: Groq pipeline (unchanged) ===
+    # ... rest of existing code ...
 ```
-
-Run: `poetry run pytest tests/integration/test_pipeline_notebooklm.py -v`
-Expected: PASS
 
 - [ ] **Step 3: Commit**
 
 ```bash
 git add src/pipeline.py tests/integration/test_pipeline_notebooklm.py
-git commit -m "feat: add NotebookLM preprocessing for long videos with Groq fallback"
+git commit -m "feat: add NotebookLM chapter summarization with graceful fallback"
 ```
 
 ---
 
-## Task 5: Test E2E with Real Long Video
+## Task 4: Test E2E with Long YouTube Video
 
-**Files:**
-- No code changes; testing only
+**No code changes — testing only**
 
-- [ ] **Step 1: Find or create a test video (30+ minutes)**
-
-Use one of the 64 pending videos in `_videos em processamento`, or create a 30min dummy video:
-
-```bash
-# Create 32-minute dummy video for testing
-ffmpeg -f lavfi -i color=c=blue:s=320x240:d=1920 -f lavfi -i sine=f=440:d=1920 test_32min.mp4
-```
-
-Or use an existing YouTube URL (e.g., a long podcast, tutorial).
-
-- [ ] **Step 2: Run pipeline with real video**
+- [ ] **Step 1: Run with a real long video**
 
 ```bash
 cd "C:\Users\lucas\OneDrive\Documentos\_Obsidian\Principal\Projetos\Programação\Media to Notes"
-poetry run mtn "https://youtu.be/YOUR_LONG_VIDEO_URL" -d intermediario
+mtn config --setup-notebooklm  # One-time setup
+mtn "https://youtu.be/LONG_VIDEO_URL" -d intermediario
 ```
 
-Expected output:
-- CLI detects video is > 30min
-- Attempts NotebookLM: "📖 Vídeo longo detectado — tentando NotebookLM..."
-- Either succeeds: "✅ NotebookLM: N capítulos extraídos"
-- Or fails gracefully: "⚠️  Erro ao processar NotebookLM — voltando ao Groq"
-- Generates note in `_revisar/YouTube/<title>.md`
-- Verify note has chapters with summaries (much shorter than raw transcript)
+Expected:
+- "📖 Vídeo longo com capítulos — tentando NotebookLM..."
+- "✅ Vídeo carregado..."
+- "📝 Resumindo cap 1/N..."
+- "📝 Resumindo cap 2/N..."
+- "✅ Nota salva em _revisar/YouTube/<titulo>.md"
 
-- [ ] **Step 3: Verify token reduction**
+- [ ] **Step 2: Verify note quality**
 
-Compare token count:
-- Old approach: raw transcrição de vídeo longo → 10k-20k tokens
-- New approach: NotebookLM summaries → 2k-3k tokens
+- Chapters correctly summarized
+- Summaries use presenter's words
+- Overall length << raw transcript (2-3k tokens vs 10-20k)
 
-Check `notes2.py` for `_estimate_tokens()` call — should show much lower number.
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
 git add .
-git commit -m "test: e2e test with long video, verified token reduction"
+git commit -m "test: e2e validation with long YouTube video"
 ```
 
 ---
 
-## Task 6: Add CLI Flag for Force-NotebookLM (Optional)
+## Task 5: Optional — Add CLI Flag for Force-NotebookLM
 
 **Files:**
 - Modify: `src/cli.py` — add `--force-notebooklm` flag
-- Modify: `src/pipeline.py` — accept `force_notebooklm` parameter
 
-- [ ] **Step 1: Write test for force flag**
+- [ ] **Step 1: Add flag to CLI**
 
-File: `tests/unit/test_cli.py`
-
-```python
-def test_cli_force_notebooklm_flag():
-    """CLI should accept --force-notebooklm flag."""
-    from src.cli import app
-    from typer.testing import CliRunner
-    
-    runner = CliRunner()
-    # Test that flag is recognized (doesn't error)
-    result = runner.invoke(app, ["--help"])
-    assert "--force-notebooklm" in result.stdout or "force" in result.stdout
-```
-
-- [ ] **Step 2: Add flag to CLI**
-
-File: `src/cli.py` (find the `mtn_main` or similar entry function)
+File: `src/cli.py` (find mtn command)
 
 ```python
-import typer
-
-app = typer.Typer()
-
 @app.command()
 def mtn_command(
     input: str = typer.Argument(...),
     depth: str = typer.Option("intermediario", "-d", "--depth"),
-    output: str = typer.Option(None, "--output", "-o"),
-    force_notebooklm: bool = typer.Option(False, "--force-notebooklm", help="Force NotebookLM even for short videos"),
-    # ... other existing flags ...
+    output: str = typer.Option(None, "-o", "--output"),
+    force_notebooklm: bool = typer.Option(False, "--force-notebooklm", help="Use NotebookLM even for short videos"),
 ):
-    """Process YouTube video or local file into Markdown note."""
-    # dispatch to pipeline with force_notebooklm=force_notebooklm
+    """Process YouTube or local media into note."""
+    # dispatch to pipeline with flag
 ```
 
-- [ ] **Step 3: Pass flag to pipeline**
+- [ ] **Step 2: Update pipeline to accept flag**
 
 File: `src/pipeline.py`
 
 ```python
 def youtube_to_notes(
     url: str,
-    depth: str = DEFAULT_DEPTH,
-    output_dir: str = None,
-    model: str = DEFAULT_MODEL,
-    lang: str = DEFAULT_LANG,
-    pasta_destino: str = "",
-    delay: bool = False,
-    by_chapter: bool = False,
+    ...,
     force_notebooklm: bool = False,  # NEW
 ):
-    """..."""
-    # ... in NotebookLM section ...
-    if force_notebooklm or is_long_video(metadata.get('duration_sec', 0)):
-        # ... rest of NotebookLM logic ...
+    # ... in NotebookLM check:
+    if (force_notebooklm or is_long_video(...)) and metadata.get('chapters'):
+        # ... proceed ...
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-git add src/cli.py src/pipeline.py tests/unit/test_cli.py
+git add src/cli.py src/pipeline.py
 git commit -m "feat: add --force-notebooklm CLI flag"
 ```
 
 ---
 
-## Self-Review Checklist
+## Summary
 
-**Spec coverage:**
-- ✅ Integrate NotebookLM-py to handle long videos — Task 1-2
-- ✅ Detect long videos (> 30min) — Task 3
-- ✅ Use NotebookLM summaries instead of raw transcript — Task 4
-- ✅ Graceful fallback to Groq if NotebookLM fails — Task 4
-- ✅ E2E testing with real video — Task 5
-- ✅ Optional CLI flag for force-NotebookLM — Task 6
+**6 tasks:** 0 (OAuth setup) + 1 (NotebookLMClient) + 2 (chapters storage) + 3 (pipeline) + 4 (E2E test) + 5 (optional CLI flag)
 
-**Placeholder scan:**
-- ✅ No "TBD" or "TODO" — all code is concrete
-- ✅ All test code is actual pytest, not pseudocode
-- ✅ All implementation steps show full code (not "add error handling")
-- ✅ All commands are exact with expected output
+**User tested:** ✅ YouTube chapter summarization approach works well
 
-**Type consistency:**
-- ✅ `NotebookLMClient.extract_chapters()` returns `{'chapters': [...], 'summary': str}`
-- ✅ `is_long_video()` accepts `int | float | None`, returns `bool`
-- ✅ `youtube_to_notes()` accepts new `force_notebooklm: bool` parameter
-- ✅ Metadata dict always has `duration_sec` key
-
-**No gaps:** ✅ All spec requirements have a task
-
----
-
-## Execution Handoff
-
-Plan complete and saved to `docs/superpowers/plans/2026-04-02-notebooklm-integration.md`.
-
-**Two execution options:**
-
-**1. Subagent-Driven (recommended)** - I dispatch a fresh subagent per task, review between tasks, fast iteration
-
-**2. Inline Execution** - Execute tasks in this session using executing-plans, batch execution with checkpoints
-
-**Which approach?**
+**Next:** Subagent-driven implementation starting with Task 0
