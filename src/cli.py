@@ -59,7 +59,7 @@ def main(
         result = youtube_to_notes(
             url=input_source,
             depth=depth.value,
-            output_dir=output,
+            output_dir=output or DEFAULT_OUTPUT_DIR,
             model=model,
             lang=lang,
             by_chapter=by_chapter,
@@ -68,7 +68,7 @@ def main(
         result = local_to_notes(
             path=input_source,
             depth=depth.value,
-            output_dir=output,
+            output_dir=output or DEFAULT_OUTPUT_DIR,
             model=model,
             lang=lang,
         )
@@ -114,7 +114,7 @@ def youtube(
     """Processa um vídeo do YouTube e gera uma nota Markdown."""
     from src.pipeline import youtube_to_notes
 
-    result = youtube_to_notes(url=url, depth=depth.value, output_dir=output, model=model, lang=lang, by_chapter=by_chapter)
+    result = youtube_to_notes(url=url, depth=depth.value, output_dir=output or DEFAULT_OUTPUT_DIR, model=model, lang=lang, by_chapter=by_chapter)
     if result:
         typer.echo(f"✅ Nota gerada: {result}")
     else:
@@ -132,7 +132,7 @@ def local(
     """Processa um arquivo local de áudio ou vídeo e gera uma nota Markdown."""
     from src.pipeline import local_to_notes
 
-    result = local_to_notes(path=path, depth=depth.value, output_dir=output, model=model, lang=lang)
+    result = local_to_notes(path=path, depth=depth.value, output_dir=output or DEFAULT_OUTPUT_DIR, model=model, lang=lang)
     if result:
         typer.echo(f"✅ Nota gerada: {result}")
     else:
