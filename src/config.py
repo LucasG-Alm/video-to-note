@@ -29,6 +29,26 @@ load_dotenv(_PROJECT_ROOT / ".env")
 DEFAULT_OUTPUT_DIR = os.getenv("DEFAULT_OUTPUT_DIR", None)
 
 
+def get_config() -> dict:
+    """
+    Carrega configuração do .env e retorna como dicionário.
+    Retorna dict vazio se .env não existir.
+    """
+    env_path = _PROJECT_ROOT / ".env"
+    config = {}
+
+    if env_path.exists():
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    if "=" in line:
+                        key, value = line.split("=", 1)
+                        config[key.strip()] = value.strip()
+
+    return config
+
+
 def save_config_to_env(key: str, value: str) -> None:
     """
     Salva uma chave-valor no arquivo .env do projeto.

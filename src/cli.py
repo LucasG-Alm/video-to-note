@@ -83,12 +83,28 @@ def main(
 def config(
     set_output_dir: Annotated[Optional[str], typer.Option("--set-output", help="Define o diretório de saída padrão")] = None,
     show: Annotated[bool, typer.Option("--show", help="Mostra configuração atual")] = False,
+    setup_notebooklm: Annotated[bool, typer.Option("--setup-notebooklm", help="Configura NotebookLM OAuth e cria notebook")] = False,
 ):
-    """Gerencia configurações do MTN (DEFAULT_OUTPUT_DIR, etc)."""
+    """Gerencia configurações do MTN (DEFAULT_OUTPUT_DIR, NotebookLM, etc)."""
     if show:
+        from src.config import get_config
+        cfg = get_config()
         current = DEFAULT_OUTPUT_DIR or "data/04. notes/ (padrão)"
         typer.echo(f"📋 Configuração atual:")
         typer.echo(f"   DEFAULT_OUTPUT_DIR = {current}")
+        nb_id = cfg.get("NOTEBOOKLM_NOTEBOOK_ID", "Not set")
+        typer.echo(f"   NOTEBOOKLM_NOTEBOOK_ID = {nb_id}")
+        return
+
+    if setup_notebooklm:
+        from src.services.notebooklm_cli import setup_oauth_and_create_notebook
+
+        nb_id, success = setup_oauth_and_create_notebook()
+        if success:
+            save_config_to_env("NOTEBOOKLM_NOTEBOOK_ID", nb_id)
+            typer.echo(f"✅ Setup complete! Notebook: {nb_id}")
+        else:
+            typer.echo(f"❌ Setup failed")
         return
 
     if set_output_dir:
@@ -99,7 +115,7 @@ def config(
         return
 
     # Se nenhuma opção foi fornecida, mostra help
-    typer.echo("Use: mtn config --set-output <caminho>  ou  mtn config --show")
+    typer.echo("Use: mtn config --set-output <caminho>  ou  mtn config --show  ou  mtn config --setup-notebooklm")
 
 
 @app.command()
