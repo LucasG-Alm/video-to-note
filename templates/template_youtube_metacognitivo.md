@@ -1,5 +1,6 @@
 ---
 page: "[[YouTube]]"
+tipo: vídeo
 tags:
   - {{tags_md}}
 link: {{webpage_url}}

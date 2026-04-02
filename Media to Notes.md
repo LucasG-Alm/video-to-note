@@ -79,4 +79,5 @@ Pipeline estável. Sprint Assets/Publicação + Sprint Qualidade 🟡 no backlog
 | 2026-03-23 | Sprint 2: M-09 (token warning) + M-10 (fallback 70b→8b) + M-05 (--by-chapter) — 95 testes | [[S2026-03-23-2 - Media to Notes]] |
 | 2026-03-24 | Nota de projeto criada do zero; Sprint Qualidade 🟡 criada (DI, cobertura, property-based); Hexagonal descartado | [[S2026-03-24 - Qualidade de Testes]] |
 | 2026-04-01 | Documentação de CLI atualizada (pip install -e, removido poetry run); refatoração do CLI agendada | [[S2026-04-01 - Media to Notes - CLAUDE]] |
-| 2026-04-02 | CLI refatorado: auto-dispatch `mtn "<input>"`, comando `config`, input_detector.py; 24 testes novos; skill atualizada | [[S2026-04-02 - Media to Notes - CLAUDE]] |
+| 2026-04-02 | CLI refatorado: auto-dispatch `mtn "<input>"`, comando `config`, input_detector.py (24 testes novos); fix DEFAULT_OUTPUT_DIR; 6 vídeos processados (5/6); notas em `_revisar/YouTube/` | [[S2026-04-02 - Media to Notes - CLAUDE]] |
+| 2026-04-02 | **Spec NotebookLM-py:** Planejamento TDD (6 tasks) pra integrar NotebookLM como solução ERR-02 (vídeos longos). Fallback gracioso, pragmatismo MVP. Pronto pra implementação subagent-driven | [[S2026-04-02-2 - Media to Notes - CLAUDE]] |

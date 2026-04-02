@@ -1,5 +1,6 @@
 ---
 page: "[[YouTube]]"
+tipo: vídeo
 Área: 
     -{{area}}
 tags:
