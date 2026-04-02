@@ -50,15 +50,14 @@ Always ask unless the user explicitly specifies a depth. If unsure, default to `
 Use the **new unified CLI command** with auto-dispatch:
 
 ```bash
-cd C:\Users\lucas\OneDrive\Documentos\_Obsidian\Principal\Projetos\Programação\Media to Notes
-poetry run mtn "<url>" --depth <depth>
+mtn "<url>" --depth <depth>
 ```
 
 **Examples:**
 ```bash
-poetry run mtn "https://www.youtube.com/watch?v=..." --depth intermediario
-poetry run mtn "https://youtu.be/abc123" -d avancado
-poetry run mtn "C:\path\to\audio.mp3" --depth raso
+mtn "https://www.youtube.com/watch?v=..." --depth intermediario
+mtn "https://youtu.be/abc123" -d avancado
+mtn "C:\path\to\audio.mp3" --depth raso
 ```
 
 The CLI auto-detects:
