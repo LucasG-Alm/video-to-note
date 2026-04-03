@@ -8,10 +8,12 @@ from src.services.youtube import (
     get_transcript_with_yt_dlp, transcript_to_text,
     download_audio_from_youtube,
 )
+from src.services.notebooklm_cli import NotebookLMClient
 from src.services.transcription import transcrever_audio_inteligente, salvar_transcricao
 from src.core.notes2 import gerar_nota_md, split_transcript_by_chapters, _invoke_llm_with_fallback, FALLBACK_MODEL
 from src.utils.utils import print_hex_color
-from src.config import DEFAULT_MODEL, DEFAULT_DEPTH, DEFAULT_LANG
+from src.utils.duration_utils import is_long_video
+from src.config import DEFAULT_MODEL, DEFAULT_DEPTH, DEFAULT_LANG, get_config, save_config_to_env
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
@@ -111,6 +113,66 @@ def youtube_to_notes(
 
     json_path = PROJECT_ROOT / "data/03. transcriptions/Youtube" / pasta_destino / f"{title}.json"
 
+    # === NEW: Try NotebookLM for long videos with chapters ===
+    if is_long_video(metadata.get('duration_sec', 0)) and metadata.get('chapters'):
+        print_hex_color('#32cbff', "📖 Vídeo longo com capítulos — tentando NotebookLM...", "")
+
+        try:
+            config = get_config()
+            nb_id = config.get('NOTEBOOKLM_NOTEBOOK_ID')
+
+            if nb_id:
+                nlm_client = NotebookLMClient(nb_id)
+
+                # Clean up old source
+                old_id = config.get('NOTEBOOKLM_LAST_SOURCE_ID')
+                if old_id:
+                    nlm_client.remove_source(old_id)
+
+                # Add video
+                src_info = nlm_client.add_youtube_source(url)
+                if src_info['source_id']:
+                    print_hex_color('#0bd271', f"✅ Vídeo carregado: {src_info['title']}", "")
+
+                    # Wait for source processing
+                    nlm_client.wait_for_source(src_info['source_id'])
+
+                    # Summarize chapters
+                    summaries = []
+                    for i, ch in enumerate(metadata.get('chapters', []), 1):
+                        print_hex_color('#32cbff', f"📝 Resumindo {i}/{len(metadata['chapters'])}: {ch['title']}", "")
+                        summary = nlm_client.summarize_chapter(
+                            ch['title'],
+                            ch.get('start_time', 0),
+                            ch.get('end_time', 0)
+                        )
+                        summaries.append({'chapter': ch['title'], 'summary': summary})
+
+                    # Save and generate note
+                    metadata['chapter_summaries'] = summaries
+                    metadata['transcription_by'] = 'NotebookLM'
+                    salvar_transcricao(metadata, {}, str(json_path))
+                    save_config_to_env('NOTEBOOKLM_LAST_SOURCE_ID', src_info['source_id'])
+
+                    try:
+                        output = gerar_nota_md(
+                            path_transcricao_json=str(json_path),
+                            path_template_md=resolve_template(depth),
+                            metadata={"tags_md": "YouTube/Vídeo/NotebookLM", "chapter_summaries": summaries},
+                            model=model,
+                            output_dir=output_dir,
+                        )
+                        if delay:
+                            import random, time
+                            wait = random.uniform(90, 150)
+                            time.sleep(wait)
+                        return output
+                    except Exception as e:
+                        print_hex_color('#f0a500', f"⚠️  Erro ao gerar nota: {e}", "")
+        except Exception as e:
+            print_hex_color('#f0a500', f"⚠️  NotebookLM failed: {e}", "")
+
+    # === EXISTING: Groq pipeline (unchanged) ===
     # Reutiliza transcrição existente se o JSON já estiver em disco
     if json_path.exists():
         import json as _json
