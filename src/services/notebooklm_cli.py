@@ -81,11 +81,12 @@ class NotebookLMClient:
             f'source add "{url}" -n {self.notebook_id} --json',
             json_output=True
         )
-        if output and 'source_id' in output:
+        if output and 'source' in output and 'id' in output['source']:
+            source = output['source']
             return {
-                'source_id': output['source_id'],
-                'title': output.get('title', 'Video'),
-                'status': output.get('status', 'processing')
+                'source_id': source['id'],
+                'title': source.get('title', 'Video'),
+                'status': 'processing'  # API doesn't return status in response
             }
         return {'source_id': None, 'title': None, 'status': None}
 
