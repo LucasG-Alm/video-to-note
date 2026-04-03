@@ -34,27 +34,36 @@ def run_notebooklm(command: str, json_output: bool = False) -> dict | str | None
 
 def setup_oauth_and_create_notebook() -> tuple[str, bool]:
     """
-    Run `notebooklm login` and create reusable notebook.
+    Run `notebooklm login` (interactive) and create reusable notebook.
 
     Returns:
         (notebook_id, success)
     """
     print("🔐 NotebookLM OAuth Setup")
-    print("📖 Opening browser for Google login...")
+    print("📖 Opening browser for Google login...\n")
 
-    # Trigger login
-    result = run_notebooklm("login")
-    if not result:
+    # Run login interactively (stdin/stdout pass through to user)
+    try:
+        result = subprocess.run("notebooklm login", shell=True, check=False)
+        if result.returncode != 0:
+            print_hex_color('#f0a500', "⚠️  Login failed or cancelled", "")
+            return None, False
+    except Exception as e:
+        print_hex_color('#f0a500', f"⚠️  Error during login: {e}", "")
         return None, False
 
-    # Verify auth
+    print("\n✅ Login successful!\n")
+
+    # Verify auth (non-interactive)
     status = run_notebooklm("status")
     if not status:
+        print_hex_color('#f0a500', "⚠️  Could not verify authentication", "")
         return None, False
 
-    # Create notebook
+    # Create notebook (non-interactive, JSON output)
     output = run_notebooklm('create "Media to Notes - Processing" --json', json_output=True)
     if not output or 'id' not in output:
+        print_hex_color('#f0a500', "⚠️  Failed to create notebook", "")
         return None, False
 
     return output['id'], True
