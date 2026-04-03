@@ -62,11 +62,11 @@ def setup_oauth_and_create_notebook() -> tuple[str, bool]:
 
     # Create notebook (non-interactive, JSON output)
     output = run_notebooklm('create "Media to Notes - Processing" --json', json_output=True)
-    if not output or 'id' not in output:
+    if not output or 'notebook' not in output or 'id' not in output['notebook']:
         print_hex_color('#f0a500', "⚠️  Failed to create notebook", "")
         return None, False
 
-    return output['id'], True
+    return output['notebook']['id'], True
 
 
 class NotebookLMClient:
