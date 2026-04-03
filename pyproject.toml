@@ -18,6 +18,7 @@ dependencies = [
     "langchain-groq (>=0.3.2,<0.4.0)",
     "python-dotenv (>=1.0.0,<2.0.0)",
     "yt-dlp (>=2026.3.17)",
+    "notebooklm-py (>=0.3.4,<0.4.0)",
 ]
 
 [project.scripts]
