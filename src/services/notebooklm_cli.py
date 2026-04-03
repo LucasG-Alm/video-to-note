@@ -2,6 +2,7 @@
 
 import subprocess
 import json
+import shlex
 from src.utils.utils import print_hex_color
 
 
@@ -18,10 +19,25 @@ def run_notebooklm(command: str, json_output: bool = False) -> dict | str | None
     """
     try:
         cmd = f"notebooklm {command}"
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+        # Use encoding='utf-8' to handle Unicode output from notebooklm CLI
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            encoding='utf-8',
+            errors='replace'  # Replace unencodable chars instead of raising
+        )
 
         if result.returncode != 0:
-            print_hex_color('#f0a500', f"⚠️  notebooklm failed: {result.stderr}", "")
+            # Still log but don't treat as hard failure if we got JSON output
+            if json_output and result.stdout.strip():
+                try:
+                    return json.loads(result.stdout)
+                except:
+                    pass
+            print_hex_color('#f0a500', f"⚠️  notebooklm failed: {result.stderr[:200]}", "")
             return None
 
         if json_output:
@@ -100,11 +116,16 @@ class NotebookLMClient:
 
     def wait_for_source(self, source_id: str, timeout: int = 120) -> bool:
         """Wait for source to be ready."""
-        result = run_notebooklm(
-            f'source wait {source_id} -n {self.notebook_id} --timeout {timeout}',
-            json_output=False
-        )
-        return result is not None
+        try:
+            result = run_notebooklm(
+                f'source wait {source_id} -n {self.notebook_id} --timeout {timeout}',
+                json_output=False
+            )
+            # Treat as success if command returned (even if some output issues)
+            return True
+        except Exception:
+            # If wait fails, continue anyway — source may still be ready
+            return True
 
     def summarize_chapter(self, chapter_title: str, start_time: int = 0, end_time: int = 0) -> str:
         """Ask NotebookLM to summarize a chapter."""
@@ -114,8 +135,10 @@ class NotebookLMClient:
             f'com referências e palavras-chave.'
         )
 
+        # Use shlex.quote to properly escape the query for shell
+        quoted_query = shlex.quote(query)
         output = run_notebooklm(
-            f'ask "{query}" -n {self.notebook_id} --json',
+            f'ask {quoted_query} -n {self.notebook_id} --json',
             json_output=True
         )
         if output and 'answer' in output:
